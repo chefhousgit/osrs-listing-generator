@@ -76,24 +76,46 @@ HISCORES LOOKUP (may or may not be provided by the user):
 - The hiscoresData object has this shape: { "accountType": "main|ironman|hardcore|ultimate|unknown", "skills": [{"name": "Attack", "rank": 12345, "level": 99, "xp": 13034431}, ...], "combatLevel": number|null }. combatLevel may be computed server-side from the skills.
 - NEVER include the provided account name in the listing. It is used only for the lookup.
 
-VAGUENESS AND ROUNDING RULES (very important - this is how listings stay enticing without overpromising):
-- Combat level and total level: always show the exact number. These are headline stats.
-- Individual skill levels in descriptions: always show the exact level (e.g. "99 Slayer", "92 Herblore"). Skill levels ARE specific selling points and should stay exact.
-- SKIP low-level noise: do not list skills at level 1 to 9 anywhere in the description. If most of the account is level 1s (e.g. a pure or a fresh build), mention only the trained skills and ignore the 1s entirely. Never include a "level 1" stat as a bullet or selling point.
-- Quest points: round DOWN to the nearest 25. 101 QP becomes "100+ QP", 155 becomes "150+ QP", 87 becomes "75+ QP", 200 becomes "200+ QP". Never state the exact quest point number.
-- Total XP: NEVER include an exact total XP figure. Use descriptive phrases like "hundreds of millions of XP", "200M+ total XP" (rounded down to nearest 50M), or simply omit.
-- Combat Achievements / combat tasks completed: NEVER give an exact count. Round down to the nearest 25 and append a plus ("75+ CAs completed"), or use tier language ("up to Hard tier") if visible, or just say "solid combat achievement progress".
-- Collection log entries / slots filled: NEVER give an exact count. Round down to the nearest 50 ("500+ collection log slots") or use qualitative wording ("deep collection log progress").
-- Achievement diary tasks: do not give exact totals. Describe by tier if visible ("multiple Hard diaries done") or stay qualitative.
-- Clue scrolls: round down to nearest 50 or describe qualitatively ("plenty of master clues banked").
-- When in doubt, go vaguer rather than specific. Exact-looking numbers the buyer could dispute are the enemy. Round-looking "X+" numbers and specific skill levels are the friend.
+NUMBER RULES — READ CAREFULLY. Past listings have hallucinated UPWARD (saying "all quests" for 35/179, "200+ collection log" for 21, "275+ diary tasks" for 23). This is the single worst failure mode. Fix it by following these rules without exception:
+
+REPORT EXACT OR OMIT. There is no middle ground. For every numeric metric:
+- If the metric is clearly visible and strong enough to be a selling point, report the EXACT number from extractedData or hiscoresData. Nothing more.
+- If the metric is low, middling, unflattering, or not clearly visible, OMIT it entirely. Do NOT try to spin it. A listing with fewer bullets is better than a listing that exaggerates.
+
+HARD CEILING. No number written in the listing may be HIGHER than the value in extractedData or hiscoresData. If extractedData says questPoints = 35, the listing may say "35 QP" or say nothing about quests — but it cannot say "100+ QP", "50+ QP", "35+ QP", "most quests", "plenty of quests", "all quests", or any other phrase that implies a higher number.
+
+FORBIDDEN FORMATS AND PHRASES (never use any of these for quests, achievements, collection log, combat tasks, clues, XP, or any progress metric):
+- The "+" suffix notation: "100+ QP", "50+ CAs", "200+ collection slots" — BANNED. No plus signs on numbers.
+- Rounding up or down to a "nicer" number of any kind.
+- Vague intensifiers: "most", "all", "every", "full", "complete", "plenty of", "tons of", "hundreds of", "thousands of", "deep", "extensive", "massive", "substantial", "solid progress", "notable progress", "significant progress".
+- "Maxed" anything unless extractedData or hiscoresData explicitly confirms it (e.g. "Maxed combat" requires all 7 combat skills at 99).
+
+ALLOWED FOR NUMERIC METRICS:
+- Exact figures: "35 QP", "23 diary tasks", "21 collection log slots", "126 combat".
+- Skill levels at exact values from hiscoresData or clearly visible in screenshots (e.g. "99 Ranged", "85 Slayer").
+- Omission.
+
+SKILL LEVELS specifically: always use the exact level. Do not round, do not say "maxed" unless level = 99 / 120.
+
+SKIP LOW-LEVEL NOISE: do not bullet any skill below level 60 (unless hiscoresData shows the account is a pure or skiller where the low level is intentional and notable, like "1 Defence"). Do not bullet any skill at level 1 to 9.
+
+TOTAL XP: only report if hiscoresData is present (which can be computed from per-skill XP) OR the exact number is clearly and crisply readable in a screenshot. Round DOWN to the nearest 10M and write it as "230M total XP" (NO plus sign). If you cannot compute or clearly read it, omit.
+
+SELF-CHECK BEFORE RETURNING:
+After you draft the listing, re-read every bullet and every number in the title. For each numeric claim, find the matching value in extractedData or hiscoresData. If the listing's number is HIGHER than the source, DELETE that bullet. If the listing uses any banned word from the list above, REWRITE it to an exact value or DELETE it. Then return the corrected JSON. Do not mention the self-check in the output.
+
+CONCRETE NEGATIVE EXAMPLES (never do any of these):
+- Extracted questPoints = 35 → listing says "✓ All quests 📜" — WRONG, fabrication. Correct: "✓ 35 QP 📜" or omit.
+- Extracted collectionLog = "21 slots filled" → listing says "✓ 200+ collection log slots" — WRONG, fabrication. Correct: "✓ 21 collection log slots" or omit.
+- Extracted achievementDiary = "23 tasks completed" → listing says "✓ 275+ diary tasks" — WRONG. Correct: "✓ 23 diary tasks" or omit.
+- Extracted combatAchievements = "45 tasks" → listing says "✓ Most combat achievements done" — WRONG. Correct: "✓ 45 combat achievements" or omit.
 
 Generate ONE listing in a hype / salesy tone, with a Title and a Description. The level of detail must scale with how much information was actually provided.
 
 TITLE RULES:
 - Rich and packed with verified selling points, not minimal. Aim for roughly 80 to 140 characters where data supports it.
 - Lead with the clearest identifier: account type (if identifiable) plus combat level plus total level.
-- Then stack additional visible selling points separated by pipes: standout 99s, notable high skill levels, rounded quest points ("100+ QP"), rounded CA progress, notable gear (if visible), ironman status, etc.
+- Then stack additional visible selling points separated by pipes: standout 99s, notable high skill levels, exact quest points, notable gear (if visible), ironman status, etc. Numbers in the title follow the same REPORT EXACT OR OMIT and HARD CEILING rules as the description.
 - Sprinkle relevant emojis (fire, bow, sword, lightning, gem) sparingly between sections. Do not spam them.
 - Only include selling points the screenshots verify. Do not pad titles with generic filler.
 - If the account is thin on data, a shorter title is fine, but still pack in everything real that is visible.
@@ -106,8 +128,8 @@ DESCRIPTION RULES (hype / salesy):
   - "🔥 ✓ 99 Strength"
   - "✓ 99 Magic 🧙"
   - "✓ 126 Combat ⚔️"
-  - "✓ 150+ QP 📜"
-  - "✓ Maxed combat 💪"
+  - "✓ 35 QP 📜"
+  - "✓ Maxed combat 💪" (only if all 7 combat skills are confirmed at 99)
 - BULLET CONTENT IS STRICT: the fact itself must be bare. No descriptive text, no sales tag, no dash with explanation, no parenthetical, no adjectives tacked on the end. The emoji is decoration only, not an excuse to add words.
   - WRONG: "✓ 99 Ranged - deadly in PvP"
   - WRONG: "✓ 99 Ranged, great for bossing 🏹"
@@ -362,7 +384,9 @@ Follow this process STRICTLY:
 
 STEP 1 — Extract. For each original screenshot, fill out one entry in extractedData.perScreenshot with ONLY what you can clearly read across the full view and its quadrants. Cross-check: if the full view and a quadrant disagree on a number, trust the quadrant (higher resolution) OR, if still unclear, omit and list it under extractedData.unreadableOrUnclear. Do NOT guess. Do NOT use knowledge of typical OSRS accounts to fill gaps.
 
-STEP 2 — Write. Generate ONE hype / salesy listing with a title and a description. Every specific fact must come from extractedData. Apply vagueness / rounding rules for quest points, total XP, combat achievements, and collection log. Bullets must be bare facts with at most ONE relevant emoji — no descriptive text after the level.
+STEP 2 — Write. Generate ONE hype / salesy listing with a title and a description. Every specific fact must come from extractedData or hiscoresData. Apply the NUMBER RULES strictly: REPORT EXACT OR OMIT. HARD CEILING. No "+" suffixes. No "all"/"most"/"plenty of"/"deep"/"extensive" for progress metrics. No "maxed" unless explicitly confirmed. If a metric is unflattering, OMIT it. Bullets are bare facts with at most ONE relevant emoji — no descriptive text after the fact.
+
+STEP 3 — Self-check. Before returning, verify every numeric claim in the title and every bullet against extractedData and hiscoresData. If any number in the listing is higher than the source, DELETE that bullet. If any banned vague phrase appears, REWRITE to exact or DELETE. Only return the cleaned JSON.
 
 Return ONLY the JSON object, no markdown fences, no preamble.`
     });
