@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OSRS Listing Generator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>OSRS Listing Generator</h1>
+    <p class="subtitle">Upload account screenshots. Get three Eldorado.gg-style listings.</p>
+  </header>
+
+  <main class="container">
+    <section id="dropzone" class="dropzone">
+      <input type="file" id="fileInput" accept="image/*" multiple hidden />
+      <div class="dropzone-inner">
+        <div class="dropzone-icon">📜</div>
+        <p><strong>Drag and drop</strong> screenshots here, or <button type="button" id="browseBtn" class="link-btn">browse</button></p>
+        <p class="hint">Stats, bank, gear, quests, achievements, overview - any combination works.</p>
+      </div>
+    </section>
+
+    <section id="previewSection" class="previews hidden">
+      <h2>Uploaded images (<span id="imageCount">0</span>)</h2>
+      <div id="previewGrid" class="preview-grid"></div>
+    </section>
+
+    <section class="actions">
+      <button id="generateBtn" class="primary-btn" disabled>Generate Listings</button>
+      <button id="clearBtn" class="secondary-btn">Clear</button>
+    </section>
+
+    <section id="statusBox" class="status-box hidden"></section>
+
+    <section id="resultsSection" class="results hidden">
+      <div id="metaRow" class="meta-row"></div>
+      <div id="notesBox" class="notes-box hidden"></div>
+
+      <div class="versions-grid">
+        <article class="version-card" data-version="professional">
+          <header>
+            <h3>Professional</h3>
+            <span class="tag">Clean &amp; factual</span>
+          </header>
+          <label>Title</label>
+          <pre class="output-title"></pre>
+          <button class="copy-btn" data-copy="title">Copy Title</button>
+          <label>Description</label>
+          <pre class="output-desc"></pre>
+          <button class="copy-btn" data-copy="desc">Copy Description</button>
+        </article>
+
+        <article class="version-card" data-version="hype">
+          <header>
+            <h3>Hype / Salesy</h3>
+            <span class="tag">Energetic</span>
+          </header>
+          <label>Title</label>
+          <pre class="output-title"></pre>
+          <button class="copy-btn" data-copy="title">Copy Title</button>
+          <label>Description</label>
+          <pre class="output-desc"></pre>
+          <button class="copy-btn" data-copy="desc">Copy Description</button>
+        </article>
+
+        <article class="version-card" data-version="detailed">
+          <header>
+            <h3>Detailed</h3>
+            <span class="tag">Comprehensive</span>
+          </header>
+          <label>Title</label>
+          <pre class="output-title"></pre>
+          <button class="copy-btn" data-copy="title">Copy Title</button>
+          <label>Description</label>
+          <pre class="output-desc"></pre>
+          <button class="copy-btn" data-copy="desc">Copy Description</button>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
