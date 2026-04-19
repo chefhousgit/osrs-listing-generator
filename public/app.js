@@ -45,7 +45,7 @@ const GEAR_CATEGORIES = [
   },
   {
     name: 'Other',
-    items: ['Rune Pouch', 'Divine Rune Pouch', 'Bottomless Compost Bucket', 'Book of the Dead', 'Sire Hilt', 'Dinh\'s Bulwark', 'Elder Maul', 'Hill Giant Club', 'Dragon Hunter Crossbow', 'Dragon Hunter Lance']
+    items: ['Rune Pouch', 'Divine Rune Pouch', 'Colossal Pouch', 'Bottomless Compost Bucket', 'Book of the Dead', 'Sire Hilt', 'Dinh\'s Bulwark', 'Elder Maul', 'Hill Giant Club', 'Dragon Hunter Crossbow', 'Dragon Hunter Lance']
   }
 ];
 
