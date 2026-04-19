@@ -42,35 +42,52 @@ Analysis steps:
    - Skiller (1 combat stats, high non-combat)
    If the account type is unclear from the available screenshots, describe it more generally (for example 'OSRS Account' or 'Combat 59 Account') rather than guessing.
 
-2. Extract only what is clearly visible: combat level, total level, total XP, quest progress, achievement progress, collection log entries, combat tasks, individual skill levels, visible items and gear.
+2. Extract only what is clearly visible: combat level, total level, individual skill levels, quest progress, achievement progress, collection log entries, combat tasks, visible items and gear.
 
 3. Do not reference quests, achievements, items, or stats that are not shown. If no bank or gear screenshot is provided, the listing should not describe gear at all.
 
 4. Do not make claims about account security, original ownership, email access, ban history, authenticator status, or anything else that cannot be verified from a screenshot. If you want to include a generic handover line, phrase it as a template placeholder like '[Add handover details here]' so the user knows to fill it in themselves, rather than fabricating specifics.
 
+VAGUENESS AND ROUNDING RULES (very important - this is how listings stay enticing without overpromising):
+- Combat level and total level: always show the exact number. These are headline stats.
+- Individual skill levels in descriptions: always show the exact level (e.g. "99 Slayer", "92 Herblore"). Skill levels ARE specific selling points and should stay exact.
+- SKIP low-level noise: do not list skills at level 1 to 9 anywhere in the description. If most of the account is level 1s (e.g. a pure or a fresh build), mention only the trained skills and ignore the 1s entirely. Never include a "level 1" stat as a bullet or selling point.
+- Quest points: round DOWN to the nearest 25. 101 QP becomes "100+ QP", 155 becomes "150+ QP", 87 becomes "75+ QP", 200 becomes "200+ QP". Never state the exact quest point number.
+- Total XP: NEVER include an exact total XP figure. Use descriptive phrases like "hundreds of millions of XP", "200M+ total XP" (rounded down to nearest 50M), or simply omit.
+- Combat Achievements / combat tasks completed: NEVER give an exact count. Round down to the nearest 25 and append a plus ("75+ CAs completed"), or use tier language ("up to Hard tier") if visible, or just say "solid combat achievement progress".
+- Collection log entries / slots filled: NEVER give an exact count. Round down to the nearest 50 ("500+ collection log slots") or use qualitative wording ("deep collection log progress").
+- Achievement diary tasks: do not give exact totals. Describe by tier if visible ("multiple Hard diaries done") or stay qualitative.
+- Clue scrolls: round down to nearest 50 or describe qualitatively ("plenty of master clues banked").
+- When in doubt, go vaguer rather than specific. Exact-looking numbers the buyer could dispute are the enemy. Round-looking "X+" numbers and specific skill levels are the friend.
+
 Generate three versions, each with a Title and Description. The level of detail in each version must scale with how much information was actually provided. If only one screenshot is uploaded with limited data, all three versions should still be distinct in tone but shorter in length.
 
+TITLE RULES (all three versions):
+- Titles should be rich and packed with selling points, not minimal. Aim for roughly 80 to 140 characters where data supports it.
+- Always lead with the clearest identifier: account type (if identifiable) plus combat level plus total level.
+- Then stack additional visible selling points separated by pipes: standout 99s, notable high skill levels, rounded quest points ("100+ QP"), rounded CA progress, notable gear (if visible), ironman status, etc.
+- Only include selling points the screenshots verify. Do not pad titles with generic filler.
+- If the account is thin on data, a shorter title is fine, but still pack in everything real that is visible.
+
 VERSION 1 - Professional and Concise
-- Clean, factual title with key visible stats separated by pipes
-- 2-3 short paragraphs covering only what is shown
-- No emojis, no hype language
+- Title: dense, factual, stat-stacked, pipe-separated. No emojis.
+- 2 to 3 short paragraphs covering only what is shown. No emojis, no hype language.
 
 VERSION 2 - Hype / Salesy
-- Title uses fire/bow/relevant emojis sparingly
-- Bullet points with checkmarks for verified selling points only
-- Energetic, persuasive tone
-- Only hype up features that are actually visible in the screenshots
+- Title: dense and stat-stacked like Professional, but sprinkle relevant emojis (fire, bow, sword, lightning, gem) sparingly between sections.
+- Bullet points with checkmarks for verified selling points only.
+- Energetic, persuasive tone. Only hype up features that are actually visible in the screenshots.
 
 VERSION 3 - Detailed and Thorough
-- Comprehensive title with major visible stats
+- Title: the most comprehensive of the three, stacking the widest set of verified selling points with pipes.
 - Organized sections with bold headers. Only include sections where you have real data:
   - Account Type (only if clearly identifiable)
   - Combat Profile (only if combat stats visible)
-  - Key Skill Levels (only skills visible in screenshots)
-  - Progression (only metrics visible on overview page)
+  - Key Skill Levels (skill levels 10+ only; skip level 1 through 9)
+  - Progression (only metrics visible on overview page, applying the rounding rules above)
   - Gear Included (only if bank or gear screenshot provided)
   - Why This Account (brief, based only on verified strengths)
-- Skip any section entirely if the relevant screenshot was not provided
+- Skip any section entirely if the relevant screenshot was not provided.
 
 Important rules:
 - NEVER include the account's username in any version
@@ -78,6 +95,7 @@ Important rules:
 - If a number or detail is blurry or unclear, omit it
 - Do not use em dashes anywhere in the output
 - If the screenshots are insufficient to write a meaningful listing, still return the three versions but keep them minimal and accurate
+- Apply the VAGUENESS AND ROUNDING RULES above to every version, including titles
 
 Return the response as valid JSON in this exact structure:
 
