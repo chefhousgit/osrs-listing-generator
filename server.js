@@ -235,6 +235,16 @@ Return the response as valid JSON in this exact structure. Fill extractedData FI
 
 Return ONLY the JSON, no markdown fences, no preamble.`;
 
+const LISTING_FOOTER = `
+
+✅ Clean account, no bans
+🎮 Login Method: Jagex Launcher
+
+📦 Upon purchase you will receive:
+📧 The email
+🔑 The password
+🔐 A secret key (used to generate Authenticator codes)`;
+
 const HISCORE_SKILLS = [
   'Overall', 'Attack', 'Defence', 'Strength', 'Hitpoints', 'Ranged', 'Prayer',
   'Magic', 'Cooking', 'Woodcutting', 'Fletching', 'Fishing', 'Firemaking',
@@ -526,6 +536,15 @@ Return ONLY the JSON object, no markdown fences, no preamble.`
 
     if (hiscoresData) parsed.hiscoresUsed = hiscoresData;
     if (hiscoresError) parsed.hiscoresError = hiscoresError;
+
+    const appendFooter = (obj) => {
+      if (obj && typeof obj.description === 'string') {
+        obj.description = obj.description.replace(/\s+$/, '') + LISTING_FOOTER;
+      }
+    };
+    appendFooter(parsed.listing);
+    if (parsed.versions) Object.values(parsed.versions).forEach(appendFooter);
+
     res.json(parsed);
   } catch (err) {
     console.error(err);
