@@ -10,6 +10,8 @@ const statusBox = document.getElementById('statusBox');
 const resultsSection = document.getElementById('resultsSection');
 const metaRow = document.getElementById('metaRow');
 const notesBox = document.getElementById('notesBox');
+const auditPanel = document.getElementById('auditPanel');
+const auditBody = document.getElementById('auditBody');
 
 let selectedFiles = [];
 
@@ -113,6 +115,110 @@ function clearCards() {
   metaRow.innerHTML = '';
   notesBox.classList.add('hidden');
   notesBox.textContent = '';
+  auditPanel.classList.add('hidden');
+  auditBody.innerHTML = '';
+}
+
+function renderAudit(extracted) {
+  auditBody.innerHTML = '';
+  if (!extracted) {
+    auditPanel.classList.add('hidden');
+    return;
+  }
+
+  const shots = Array.isArray(extracted.perScreenshot) ? extracted.perScreenshot : [];
+  shots.forEach((shot) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'audit-screenshot';
+
+    const header = document.createElement('div');
+    header.className = 'audit-screenshot-header';
+    const idx = shot.imageIndex ? ' #' + shot.imageIndex : '';
+    header.innerHTML = '<span>Image' + idx + ': ' + escapeHtml(shot.screenshotType || 'unknown') + '</span>';
+    if (shot.confidence) {
+      const conf = document.createElement('span');
+      conf.className = 'audit-conf ' + String(shot.confidence).toLowerCase();
+      conf.textContent = shot.confidence + ' confidence';
+      header.appendChild(conf);
+    }
+    wrap.appendChild(header);
+
+    const facts = document.createElement('dl');
+    facts.className = 'audit-facts';
+
+    const addRow = (label, value) => {
+      if (value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0)) return;
+      const dt = document.createElement('dt');
+      dt.textContent = label;
+      const dd = document.createElement('dd');
+      dd.textContent = typeof value === 'string' || typeof value === 'number' ? String(value) : JSON.stringify(value);
+      facts.appendChild(dt);
+      facts.appendChild(dd);
+    };
+
+    addRow('Combat level', shot.combatLevel);
+    addRow('Total level', shot.totalLevel);
+    addRow('Total XP', shot.totalXP);
+    addRow('Quest points', shot.questPoints);
+    addRow('Achievement diary', shot.achievementDiary);
+    addRow('Combat achievements', shot.combatAchievements);
+    addRow('Collection log', shot.collectionLog);
+    addRow('Clue scrolls', shot.clueScrolls);
+
+    if (Array.isArray(shot.skillsVisible) && shot.skillsVisible.length > 0) {
+      const dt = document.createElement('dt');
+      dt.textContent = 'Skills read';
+      const dd = document.createElement('dd');
+      const chips = document.createElement('div');
+      chips.className = 'audit-skills';
+      shot.skillsVisible.forEach((s) => {
+        const c = document.createElement('span');
+        c.className = 'skill-chip';
+        c.textContent = (s.level !== undefined && s.level !== null ? s.level + ' ' : '') + (s.skill || '');
+        chips.appendChild(c);
+      });
+      dd.appendChild(chips);
+      facts.appendChild(dt);
+      facts.appendChild(dd);
+    }
+
+    if (Array.isArray(shot.visibleItemsOrGear) && shot.visibleItemsOrGear.length > 0) {
+      addRow('Items/gear', shot.visibleItemsOrGear.join(', '));
+    }
+    if (Array.isArray(shot.otherFacts) && shot.otherFacts.length > 0) {
+      addRow('Other', shot.otherFacts.join('; '));
+    }
+
+    wrap.appendChild(facts);
+    auditBody.appendChild(wrap);
+  });
+
+  const unclear = Array.isArray(extracted.unreadableOrUnclear) ? extracted.unreadableOrUnclear : [];
+  if (unclear.length > 0) {
+    const box = document.createElement('div');
+    box.className = 'audit-unclear';
+    const title = document.createElement('strong');
+    title.textContent = 'Unreadable or unclear (omitted from listing):';
+    box.appendChild(title);
+    const ul = document.createElement('ul');
+    unclear.forEach((item) => {
+      const li = document.createElement('li');
+      li.textContent = item;
+      ul.appendChild(li);
+    });
+    box.appendChild(ul);
+    auditBody.appendChild(box);
+  }
+
+  if (shots.length === 0 && unclear.length === 0) {
+    auditPanel.classList.add('hidden');
+    return;
+  }
+  auditPanel.classList.remove('hidden');
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 function renderResults(data) {
@@ -155,14 +261,14 @@ function renderResults(data) {
     notesBox.classList.remove('hidden');
   }
 
-  const versions = data.versions || {};
-  ['professional', 'hype', 'detailed'].forEach((key) => {
-    const card = document.querySelector('.version-card[data-version="' + key + '"]');
-    if (!card) return;
-    const v = versions[key] || { title: '', description: '' };
-    card.querySelector('.output-title').textContent = v.title || '';
-    card.querySelector('.output-desc').textContent = v.description || '';
-  });
+  const listing = data.listing || (data.versions && data.versions.hype) || { title: '', description: '' };
+  const card = document.querySelector('.version-card[data-version="hype"]');
+  if (card) {
+    card.querySelector('.output-title').textContent = listing.title || '';
+    card.querySelector('.output-desc').textContent = listing.description || '';
+  }
+
+  renderAudit(data.extractedData);
 
   resultsSection.classList.remove('hidden');
 }

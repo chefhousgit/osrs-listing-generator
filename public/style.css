@@ -248,6 +248,140 @@ html, body {
   font-size: 0.9rem;
 }
 
+.audit-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 18px;
+  padding: 0;
+}
+
+.audit-panel[open] {
+  border-color: var(--gold-dim);
+}
+
+.audit-panel summary {
+  cursor: pointer;
+  padding: 12px 16px;
+  color: var(--gold);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  list-style: none;
+  user-select: none;
+}
+
+.audit-panel summary::-webkit-details-marker { display: none; }
+
+.audit-panel summary::before {
+  content: '▸';
+  margin-right: 6px;
+  transition: transform 0.15s;
+  display: inline-block;
+}
+
+.audit-panel[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.audit-hint {
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  font-weight: normal;
+}
+
+#auditBody {
+  padding: 0 16px 14px;
+}
+
+.audit-screenshot {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-top: 10px;
+}
+
+.audit-screenshot-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.audit-conf {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  font-weight: normal;
+}
+
+.audit-conf.high { color: #7fcf7f; border-color: #3c5a3c; }
+.audit-conf.medium { color: #e4b04a; border-color: var(--gold-dim); }
+.audit-conf.low { color: #f08080; border-color: #7a3a3a; }
+
+.audit-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.audit-facts dt {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.audit-facts dd {
+  margin: 0;
+  color: var(--text-dim);
+  word-break: break-word;
+}
+
+.audit-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.skill-chip {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  color: var(--text);
+}
+
+.audit-unclear {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--bg-2);
+  border: 1px solid #7a3a3a;
+  border-radius: 6px;
+  color: #f5b4b2;
+  font-size: 0.85rem;
+}
+
+.audit-unclear strong {
+  color: #f08080;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.audit-unclear ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
 .versions-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));

@@ -38,37 +38,19 @@
       <div id="metaRow" class="meta-row"></div>
       <div id="notesBox" class="notes-box hidden"></div>
 
-      <div class="versions-grid">
-        <article class="version-card" data-version="professional">
-          <header>
-            <h3>Professional</h3>
-            <span class="tag">Clean &amp; factual</span>
-          </header>
-          <label>Title</label>
-          <pre class="output-title"></pre>
-          <button class="copy-btn" data-copy="title">Copy Title</button>
-          <label>Description</label>
-          <pre class="output-desc"></pre>
-          <button class="copy-btn" data-copy="desc">Copy Description</button>
-        </article>
+      <details id="auditPanel" class="audit-panel hidden" open>
+        <summary>
+          <strong>Audit: what the model claims to have read</strong>
+          <span class="audit-hint">Scan this before copying. If something here is wrong, the listings will be wrong too.</span>
+        </summary>
+        <div id="auditBody"></div>
+      </details>
 
+      <div class="versions-grid">
         <article class="version-card" data-version="hype">
           <header>
-            <h3>Hype / Salesy</h3>
-            <span class="tag">Energetic</span>
-          </header>
-          <label>Title</label>
-          <pre class="output-title"></pre>
-          <button class="copy-btn" data-copy="title">Copy Title</button>
-          <label>Description</label>
-          <pre class="output-desc"></pre>
-          <button class="copy-btn" data-copy="desc">Copy Description</button>
-        </article>
-
-        <article class="version-card" data-version="detailed">
-          <header>
-            <h3>Detailed</h3>
-            <span class="tag">Comprehensive</span>
+            <h3>Listing</h3>
+            <span class="tag">Hype / salesy</span>
           </header>
           <label>Title</label>
           <pre class="output-title"></pre>
