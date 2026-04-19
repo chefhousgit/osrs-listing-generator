@@ -1,3 +1,4 @@
+const usernameInput = document.getElementById('usernameInput');
 const fileInput = document.getElementById('fileInput');
 const dropzone = document.getElementById('dropzone');
 const browseBtn = document.getElementById('browseBtn');
@@ -119,10 +120,55 @@ function clearCards() {
   auditBody.innerHTML = '';
 }
 
-function renderAudit(extracted) {
+function renderAudit(extracted, hiscores) {
   auditBody.innerHTML = '';
-  if (!extracted) {
+  if (!extracted && !hiscores) {
     auditPanel.classList.add('hidden');
+    return;
+  }
+
+  if (hiscores && Array.isArray(hiscores.skills)) {
+    const wrap = document.createElement('div');
+    wrap.className = 'audit-screenshot';
+    const header = document.createElement('div');
+    header.className = 'audit-screenshot-header';
+    header.innerHTML = '<span>Hiscores lookup (authoritative): ' + escapeHtml(hiscores.accountType || 'main') + '</span>';
+    const conf = document.createElement('span');
+    conf.className = 'audit-conf high';
+    conf.textContent = 'authoritative';
+    header.appendChild(conf);
+    wrap.appendChild(header);
+
+    const chipsRow = document.createElement('div');
+    chipsRow.className = 'audit-skills';
+    const overall = hiscores.skills.find((s) => s.name === 'Overall');
+    if (overall && overall.level) {
+      const c = document.createElement('span');
+      c.className = 'skill-chip';
+      c.textContent = 'Total ' + overall.level;
+      chipsRow.appendChild(c);
+    }
+    if (hiscores.combatLevel) {
+      const c = document.createElement('span');
+      c.className = 'skill-chip';
+      c.textContent = 'Combat ' + hiscores.combatLevel;
+      chipsRow.appendChild(c);
+    }
+    hiscores.skills
+      .filter((s) => s.name !== 'Overall' && s.level && s.level > 1)
+      .sort((a, b) => b.level - a.level)
+      .forEach((s) => {
+        const c = document.createElement('span');
+        c.className = 'skill-chip';
+        c.textContent = s.level + ' ' + s.name;
+        chipsRow.appendChild(c);
+      });
+    wrap.appendChild(chipsRow);
+    auditBody.appendChild(wrap);
+  }
+
+  if (!extracted) {
+    auditPanel.classList.remove('hidden');
     return;
   }
 
@@ -268,7 +314,21 @@ function renderResults(data) {
     card.querySelector('.output-desc').textContent = listing.description || '';
   }
 
-  renderAudit(data.extractedData);
+  if (data.hiscoresUsed) {
+    const b = document.createElement('span');
+    b.className = 'badge active';
+    b.textContent = '📊 Hiscores: ' + (data.hiscoresUsed.accountType || 'main');
+    metaRow.appendChild(b);
+  }
+  if (data.hiscoresError) {
+    const err = document.createElement('div');
+    err.className = 'audit-unclear';
+    err.innerHTML = '<strong>Hiscore lookup failed:</strong>' + escapeHtml(data.hiscoresError);
+    err.style.marginTop = '10px';
+    metaRow.after(err);
+  }
+
+  renderAudit(data.extractedData, data.hiscoresUsed);
 
   resultsSection.classList.remove('hidden');
 }
@@ -292,6 +352,8 @@ generateBtn.addEventListener('click', async () => {
 
   const formData = new FormData();
   selectedFiles.forEach((f) => formData.append('images', f));
+  const username = usernameInput.value.trim();
+  if (username) formData.append('username', username);
 
   try {
     const res = await fetch('/generate', { method: 'POST', body: formData });

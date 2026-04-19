@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
+const sharp = require('sharp');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -30,6 +31,13 @@ CRITICAL RULES — READ CAREFULLY, THIS IS THE MOST IMPORTANT PART:
 5. If the screenshots contradict each other, or you see the same fact at different values in different screenshots, report both in "unreadableOrUnclear" and do not cite either in the listings.
 
 6. A short accurate listing is always better than a long listing with one wrong number. Buyers dispute wrong numbers. Vague and enticing beats specific and wrong.
+
+7. ITEM / GEAR IDENTIFICATION — extra caution. OSRS has many items that look superficially similar at low resolution:
+   - Graceful outfit (various colors) looks similar to other robe sets.
+   - Runecrafting Raiments / Lunar / Wicked / skilling outfits can look like generic wizard robes, monk robes, leather armor, or mage gear.
+   - Skilling capes, achievement diary capes, max cape, completionist cape, team capes, and regular dyed capes are easily confused.
+   - Boot, glove, and amulet icons are tiny and easily misidentified.
+   Do NOT name a specific item unless you are confident from visible color, shape, and context (e.g. clearly sitting in the skill outfit slot, or hovered with a readable tooltip). If you cannot be sure, describe gear generically ("skilling outfit", "mage robes", "cape", "full helm") or omit entirely. Never guess a specific named item. Specifically: do not identify an outfit as "Graceful", "Wizard robes", "Leather body", "Red cape", etc. unless you can clearly see the item name in a tooltip or the shape and color match unambiguously.
 
 The user may upload any combination of screenshots. Common types include:
 - Skills/stats panel
@@ -60,6 +68,14 @@ Analysis steps:
 
 4. Do not make claims about account security, original ownership, email access, ban history, authenticator status, or anything else that cannot be verified from a screenshot. If you want to include a generic handover line, phrase it as a template placeholder like '[Add handover details here]' so the user knows to fill it in themselves, rather than fabricating specifics.
 
+HISCORES LOOKUP (may or may not be provided by the user):
+- If the user provides an OSRS account name, the server will look up the account on the official OSRS hiscores and include the parsed result as a JSON object called hiscoresData in the user message. If no name is provided, no lookup is performed and no hiscoresData object will appear.
+- When hiscoresData IS present, it is AUTHORITATIVE for skill levels, combat level, total level, and total XP. Trust it over anything you read from the screenshots. If a screenshot disagrees with hiscoresData, the screenshot is wrong. Use hiscoresData values in the listing.
+- When hiscoresData IS present, set extractedData.hiscores to a short summary of what was used, and set each per-screenshot entry's skillsVisible and related fields based on what the screenshot confirms. You do NOT need to re-read skill numbers from the screenshots if the hiscores already have them.
+- When hiscoresData is missing, fall back fully to the vision-based rules above.
+- The hiscoresData object has this shape: { "accountType": "main|ironman|hardcore|ultimate|unknown", "skills": [{"name": "Attack", "rank": 12345, "level": 99, "xp": 13034431}, ...], "combatLevel": number|null }. combatLevel may be computed server-side from the skills.
+- NEVER include the provided account name in the listing. It is used only for the lookup.
+
 VAGUENESS AND ROUNDING RULES (very important - this is how listings stay enticing without overpromising):
 - Combat level and total level: always show the exact number. These are headline stats.
 - Individual skill levels in descriptions: always show the exact level (e.g. "99 Slayer", "92 Herblore"). Skill levels ARE specific selling points and should stay exact.
@@ -83,21 +99,26 @@ TITLE RULES:
 - If the account is thin on data, a shorter title is fine, but still pack in everything real that is visible.
 
 DESCRIPTION RULES (hype / salesy):
-- Energetic, persuasive tone. Short intro line allowed.
-- Use bullet points with the check-mark character (the plain ✓ symbol) for verified selling points.
-- BULLET FORMAT IS STRICT: each bullet is just the check mark plus the fact, nothing else. No descriptive text, no sales tag, no dash, no parenthetical, no adjectives tacked on the end.
-  - Correct: "✓ 99 Ranged"
-  - Correct: "✓ 126 Combat"
-  - Correct: "✓ 150+ QP"
-  - Correct: "✓ Maxed combat"
+- Energetic, persuasive tone. Short hyped intro line (1 sentence) encouraged, with 1 to 2 emojis for flavor (fire 🔥, lightning ⚡, gem 💎, money 💰, muscle 💪).
+- Use bullet points with the plain check-mark symbol ✓ for verified selling points.
+- Each bullet may include ONE relevant emoji in addition to the ✓. Either before the ✓ or after the fact. Examples of the exact format:
+  - "✓ 99 Ranged 🏹"
+  - "🔥 ✓ 99 Strength"
+  - "✓ 99 Magic 🧙"
+  - "✓ 126 Combat ⚔️"
+  - "✓ 150+ QP 📜"
+  - "✓ Maxed combat 💪"
+- BULLET CONTENT IS STRICT: the fact itself must be bare. No descriptive text, no sales tag, no dash with explanation, no parenthetical, no adjectives tacked on the end. The emoji is decoration only, not an excuse to add words.
   - WRONG: "✓ 99 Ranged - deadly in PvP"
-  - WRONG: "✓ 99 Ranged, great for bossing"
+  - WRONG: "✓ 99 Ranged, great for bossing 🏹"
   - WRONG: "✓ 150+ QP (most quests completed)"
+  - WRONG: "✓ 99 Ranged 🏹 PvP ready"
+- Map skill emojis sensibly: Attack ⚔️, Strength 💪, Defence 🛡️, Hitpoints ❤️, Ranged 🏹, Magic 🧙, Prayer ✨, Slayer 💀, Fishing 🎣, Mining ⛏️, Woodcutting 🪓, Cooking 🍳, Herblore 🧪, Farming 🌱, Thieving 🗝️, Crafting ✂️, Smithing 🔨, Fletching 🪶, Agility 🏃, Runecraft 🌀, Hunter 🦌, Construction 🏠, Firemaking 🔥, Combat ⚔️, QP 📜, Total level ⭐, Ironman ⛓️.
 - One fact per bullet. Do not combine two stats into one bullet.
-- Only hype up features that are actually visible in the screenshots. Every bullet must correspond to a fact in extractedData.
+- Only hype up features that are actually visible in the screenshots (or returned by the hiscores lookup if one was included). Every bullet must correspond to a fact in extractedData or hiscoresData.
 - Skip any skill at level 1 through 9. Do not bullet-list low levels.
 - Apply the VAGUENESS AND ROUNDING RULES above to every bullet and to the title.
-- A short optional closing line is allowed (one sentence max), but do not fabricate anything in it.
+- A short hyped closing line is allowed (1 sentence max) with 1 emoji, but do not fabricate anything in it.
 
 Important rules:
 - NEVER include the account's username
@@ -151,6 +172,84 @@ Return the response as valid JSON in this exact structure. Fill extractedData FI
 
 Return ONLY the JSON, no markdown fences, no preamble.`;
 
+const HISCORE_SKILLS = [
+  'Overall', 'Attack', 'Defence', 'Strength', 'Hitpoints', 'Ranged', 'Prayer',
+  'Magic', 'Cooking', 'Woodcutting', 'Fletching', 'Fishing', 'Firemaking',
+  'Crafting', 'Smithing', 'Mining', 'Herblore', 'Agility', 'Thieving', 'Slayer',
+  'Farming', 'Runecraft', 'Hunter', 'Construction'
+];
+
+const HISCORE_ENDPOINTS = [
+  { type: 'main', url: 'https://secure.runescape.com/m=hiscore_oldschool/index_lite.ws' },
+  { type: 'ironman', url: 'https://secure.runescape.com/m=hiscore_oldschool_ironman/index_lite.ws' },
+  { type: 'hardcore', url: 'https://secure.runescape.com/m=hiscore_oldschool_hardcore_ironman/index_lite.ws' },
+  { type: 'ultimate', url: 'https://secure.runescape.com/m=hiscore_oldschool_ultimate/index_lite.ws' }
+];
+
+function computeCombatLevel(levelByName) {
+  const atk = levelByName.Attack || 1;
+  const str = levelByName.Strength || 1;
+  const def = levelByName.Defence || 1;
+  const hp = levelByName.Hitpoints || 10;
+  const pray = levelByName.Prayer || 1;
+  const ranged = levelByName.Ranged || 1;
+  const magic = levelByName.Magic || 1;
+  const base = 0.25 * (def + hp + Math.floor(pray / 2));
+  const melee = 0.325 * (atk + str);
+  const range = 0.325 * (Math.floor(ranged / 2) + ranged);
+  const mage = 0.325 * (Math.floor(magic / 2) + magic);
+  return Math.floor(base + Math.max(melee, range, mage));
+}
+
+function parseHiscoreCsv(text) {
+  const lines = text.trim().split(/\r?\n/);
+  const skills = [];
+  for (let i = 0; i < HISCORE_SKILLS.length && i < lines.length; i++) {
+    const parts = lines[i].split(',');
+    if (parts.length < 3) continue;
+    const rank = parseInt(parts[0], 10);
+    const level = parseInt(parts[1], 10);
+    const xp = parseInt(parts[2], 10);
+    skills.push({ name: HISCORE_SKILLS[i], rank: isNaN(rank) ? null : rank, level: isNaN(level) ? null : level, xp: isNaN(xp) ? null : xp });
+  }
+  return skills;
+}
+
+async function lookupHiscores(username) {
+  const trimmed = String(username || '').trim();
+  if (!trimmed) return null;
+  if (!/^[A-Za-z0-9 _-]{1,12}$/.test(trimmed)) {
+    return { error: 'Invalid OSRS account name. Use letters, numbers, spaces, hyphens, or underscores (max 12 characters).' };
+  }
+  const encoded = encodeURIComponent(trimmed);
+
+  for (const ep of HISCORE_ENDPOINTS) {
+    try {
+      const res = await fetch(`${ep.url}?player=${encoded}`, {
+        method: 'GET',
+        headers: { 'User-Agent': 'osrs-listing-generator/1.0' }
+      });
+      if (res.status === 404) continue;
+      if (!res.ok) continue;
+      const text = await res.text();
+      if (!text || text.length < 20) continue;
+      const skills = parseHiscoreCsv(text);
+      if (skills.length < 8) continue;
+      const levelByName = {};
+      skills.forEach((s) => { if (s.level) levelByName[s.name] = s.level; });
+      const combatLevel = computeCombatLevel(levelByName);
+      return {
+        accountType: ep.type,
+        skills,
+        combatLevel
+      };
+    } catch (e) {
+      continue;
+    }
+  }
+  return { error: `No hiscore entry found for "${trimmed}". Check the spelling (or the account may not be ranked).` };
+}
+
 app.post('/generate', upload.array('images', 20), async (req, res) => {
   try {
     if (!PROXY_URL || !PROXY_SECRET) {
@@ -164,14 +263,109 @@ app.post('/generate', upload.array('images', 20), async (req, res) => {
       return res.status(400).json({ error: 'No images uploaded. Please add at least one screenshot.' });
     }
 
-    const imageBlocks = files.map((file) => ({
-      type: 'image',
-      source: {
-        type: 'base64',
-        media_type: file.mimetype || 'image/png',
-        data: file.buffer.toString('base64')
+    const rawUsername = typeof req.body.username === 'string' ? req.body.username : '';
+    let hiscoresData = null;
+    let hiscoresError = null;
+    if (rawUsername.trim()) {
+      const result = await lookupHiscores(rawUsername);
+      if (result && result.error) {
+        hiscoresError = result.error;
+      } else if (result) {
+        hiscoresData = result;
       }
-    }));
+    }
+
+    const content = [];
+    let totalBlocks = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const imageIndex = i + 1;
+
+      let buffer = file.buffer;
+      let meta;
+      try {
+        const img = sharp(buffer, { failOn: 'none' });
+        meta = await img.metadata();
+      } catch (e) {
+        meta = null;
+      }
+
+      const quadrants = [];
+      if (meta && meta.width && meta.height && Math.max(meta.width, meta.height) >= 1200) {
+        const w = meta.width;
+        const h = meta.height;
+        const halfW = Math.ceil(w / 2);
+        const halfH = Math.ceil(h / 2);
+        const ox = Math.ceil(w * 0.1);
+        const oy = Math.ceil(h * 0.1);
+
+        const regions = [
+          { name: 'top-left', left: 0, top: 0, width: Math.min(w, halfW + ox), height: Math.min(h, halfH + oy) },
+          { name: 'top-right', left: Math.max(0, halfW - ox), top: 0, width: Math.min(w - Math.max(0, halfW - ox), w), height: Math.min(h, halfH + oy) },
+          { name: 'bottom-left', left: 0, top: Math.max(0, halfH - oy), width: Math.min(w, halfW + ox), height: Math.min(h - Math.max(0, halfH - oy), h) },
+          { name: 'bottom-right', left: Math.max(0, halfW - ox), top: Math.max(0, halfH - oy), width: Math.min(w - Math.max(0, halfW - ox), w), height: Math.min(h - Math.max(0, halfH - oy), h) }
+        ];
+
+        for (const r of regions) {
+          try {
+            const out = await sharp(buffer, { failOn: 'none' })
+              .extract({ left: r.left, top: r.top, width: r.width, height: r.height })
+              .png({ compressionLevel: 6 })
+              .toBuffer();
+            quadrants.push({ name: r.name, buffer: out, mime: 'image/png' });
+          } catch (e) {
+            // skip failed crops
+          }
+        }
+      }
+
+      content.push({
+        type: 'text',
+        text: `Image ${imageIndex} — full view:`
+      });
+      content.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: file.mimetype || 'image/png',
+          data: buffer.toString('base64')
+        }
+      });
+      totalBlocks++;
+
+      for (const q of quadrants) {
+        content.push({
+          type: 'text',
+          text: `Image ${imageIndex} — ${q.name} quadrant (zoomed crop of the same screenshot above, same underlying data):`
+        });
+        content.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: q.mime,
+            data: q.buffer.toString('base64')
+          }
+        });
+      }
+    }
+
+    const hiscoresBlock = hiscoresData
+      ? `\n\nHISCORES LOOKUP RESULT (authoritative for skill levels, total level, total XP, and combat level — trust over screenshots):\n${JSON.stringify(hiscoresData, null, 2)}`
+      : '';
+
+    content.push({
+      type: 'text',
+      text: `I attached ${files.length} OSRS account screenshot${files.length === 1 ? '' : 's'}, each potentially followed by up to 4 zoomed quadrant crops of that same screenshot. Quadrant crops are NOT separate screenshots — they show the same data at higher effective resolution to help you read small numbers. When filling extractedData.perScreenshot, produce ONE entry per original screenshot (imageIndex 1..${files.length}), not per quadrant. Use the quadrants to verify / correct what you read on the full view.${hiscoresBlock}
+
+Follow this process STRICTLY:
+
+STEP 1 — Extract. For each original screenshot, fill out one entry in extractedData.perScreenshot with ONLY what you can clearly read across the full view and its quadrants. Cross-check: if the full view and a quadrant disagree on a number, trust the quadrant (higher resolution) OR, if still unclear, omit and list it under extractedData.unreadableOrUnclear. Do NOT guess. Do NOT use knowledge of typical OSRS accounts to fill gaps.
+
+STEP 2 — Write. Generate ONE hype / salesy listing with a title and a description. Every specific fact must come from extractedData. Apply vagueness / rounding rules for quest points, total XP, combat achievements, and collection log. Bullets must be bare facts with at most ONE relevant emoji — no descriptive text after the level.
+
+Return ONLY the JSON object, no markdown fences, no preamble.`
+    });
 
     const anthropicBody = {
       model: 'claude-sonnet-4-5-20250929',
@@ -179,24 +373,7 @@ app.post('/generate', upload.array('images', 20), async (req, res) => {
       temperature: 0.2,
       system: SYSTEM_PROMPT,
       messages: [
-        {
-          role: 'user',
-          content: [
-            ...imageBlocks,
-            {
-              type: 'text',
-              text: `I am attaching ${imageBlocks.length} OSRS account screenshot${imageBlocks.length === 1 ? '' : 's'}, numbered in the order provided (image 1, image 2, etc.).
-
-Follow this process STRICTLY:
-
-STEP 1 - Extract. For each screenshot, fill out one entry in extractedData.perScreenshot with ONLY what you can clearly read. If a number is small, blurry, or ambiguous, OMIT it and add a note in extractedData.unreadableOrUnclear instead. Do NOT guess. Do NOT use knowledge of typical OSRS accounts to fill gaps.
-
-STEP 2 - Write. Generate ONE hype / salesy listing with a title and a description. Every specific fact (skill level, quest points, combat level, item name, etc.) must come from extractedData. If it is not in extractedData, it cannot appear in the listing. Apply the vagueness and rounding rules for quest points, total XP, combat achievements, and collection log. Bullets in the description must be bare (e.g. "✓ 99 Ranged") with no extra descriptive text after the level.
-
-Return ONLY the JSON object, no markdown fences, no preamble.`
-            }
-          ]
-        }
+        { role: 'user', content }
       ]
     };
 
@@ -259,6 +436,8 @@ Return ONLY the JSON object, no markdown fences, no preamble.`
       });
     }
 
+    if (hiscoresData) parsed.hiscoresUsed = hiscoresData;
+    if (hiscoresError) parsed.hiscoresError = hiscoresError;
     res.json(parsed);
   } catch (err) {
     console.error(err);

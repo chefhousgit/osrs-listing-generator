@@ -13,6 +13,14 @@
   </header>
 
   <main class="container">
+    <section class="username-row">
+      <label for="usernameInput">
+        <span>OSRS account name <span class="optional">(optional)</span></span>
+        <small>If provided, we pull exact skill levels straight from the official hiscores. Not shown in the listing.</small>
+      </label>
+      <input type="text" id="usernameInput" maxlength="12" autocomplete="off" placeholder="e.g. Zezima" />
+    </section>
+
     <section id="dropzone" class="dropzone">
       <input type="file" id="fileInput" accept="image/*" multiple hidden />
       <div class="dropzone-inner">
@@ -38,14 +46,6 @@
       <div id="metaRow" class="meta-row"></div>
       <div id="notesBox" class="notes-box hidden"></div>
 
-      <details id="auditPanel" class="audit-panel hidden" open>
-        <summary>
-          <strong>Audit: what the model claims to have read</strong>
-          <span class="audit-hint">Scan this before copying. If something here is wrong, the listings will be wrong too.</span>
-        </summary>
-        <div id="auditBody"></div>
-      </details>
-
       <div class="versions-grid">
         <article class="version-card" data-version="hype">
           <header>
@@ -60,6 +60,14 @@
           <button class="copy-btn" data-copy="desc">Copy Description</button>
         </article>
       </div>
+
+      <details id="auditPanel" class="audit-panel hidden">
+        <summary>
+          <strong>Debug: what the model claims to have read</strong>
+          <span class="audit-hint">Open this if a number looks off. If something here is wrong, the listing is wrong too.</span>
+        </summary>
+        <div id="auditBody"></div>
+      </details>
     </section>
   </main>
 

@@ -52,6 +52,54 @@ html, body {
   padding: 24px;
 }
 
+.username-row {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.username-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 260px;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.username-row label small {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  font-weight: normal;
+}
+
+.username-row .optional {
+  color: var(--text-dim);
+  font-weight: normal;
+  font-size: 0.85rem;
+}
+
+.username-row input {
+  flex: 0 1 220px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font: inherit;
+}
+
+.username-row input:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
 .dropzone {
   border: 2px dashed var(--border);
   border-radius: var(--radius);
