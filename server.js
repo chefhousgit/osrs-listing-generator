@@ -76,7 +76,35 @@ HISCORES LOOKUP (may or may not be provided by the user):
 - The hiscoresData object has this shape: { "accountType": "main|ironman|hardcore|ultimate|unknown", "skills": [{"name": "Attack", "rank": 12345, "level": 99, "xp": 13034431}, ...], "combatLevel": number|null }. combatLevel may be computed server-side from the skills.
 - NEVER include the provided account name in the listing. It is used only for the lookup.
 
-NUMBER RULES — READ CAREFULLY. Past listings have hallucinated UPWARD (saying "all quests" for 35/179, "200+ collection log" for 21, "275+ diary tasks" for 23). This is the single worst failure mode. Fix it by following these rules without exception:
+FRACTION PARSING ON THE ACCOUNT OVERVIEW PAGE — READ THIS FIRST:
+
+The OSRS account overview page shows multiple progress metrics as FRACTIONS in the format "N/M" where N is the user's progress and M is the game-wide total. Examples:
+- "Quests Completed: 35/179" — 35 quests done out of 179 total
+- "Combat Achievements: 45/622" — 45 tasks done out of 622
+- "Collection Log: 21/1699" — 21 unique items out of 1699
+- "Achievement Diary: 23/492" — 23 diary tasks out of 492
+- "Music Tracks: 120/220"
+- Clue scrolls per tier (beginner / easy / medium / hard / elite / master): "5/35", "12/40", etc.
+
+CRITICAL FRACTION READING RULES:
+- The slash "/" is ALWAYS a separator, NEVER a digit. It is not a "0", not a "1", not a "7", not any digit.
+- The numerator (left of slash) and denominator (right of slash) are TWO SEPARATE numbers. Never fuse them.
+- "21/1699" is NOT "211699", NOT "211", NOT "21699", NOT "21099", NOT "210". It is exactly twenty-one out of one thousand six hundred ninety-nine.
+- "35/179" is NOT "35179" and NOT "350". It is thirty-five out of one hundred seventy-nine.
+- "23/492" is NOT "23492" and NOT "230". It is twenty-three out of four hundred ninety-two.
+- Use the zoomed quadrant crops specifically to verify fractions. The full view is often too small to read the slash cleanly.
+- In extractedData, record fraction metrics using the EXACT fraction string with the slash preserved: "21/1699", not "21", not "1699", not "211699". This lets the user verify in the audit panel that the slash was parsed correctly.
+- If you see a fraction but cannot cleanly separate the two sides (slash blurry, digits squished), OMIT the metric and add a note in unreadableOrUnclear. Do not guess which side of the slash each digit falls on.
+
+REPORTING FRACTION METRICS IN THE LISTING:
+- Use ONLY the numerator (the user's progress count). The denominator is game-wide and tells a buyer nothing about this specific account.
+- Example: extractedData "collectionLog: 21/1699" → listing bullet "✓ 21 collection log slots" — or omit if low (see REPORT EXACT OR OMIT rule below).
+- Never combine numerator and denominator into one number.
+- Never invent a fraction that wasn't there.
+
+This section exists because past listings misread fractions like "21/1699" as "210" and then inflated to "200+". That is a double fabrication and it is unacceptable.
+
+NUMBER RULES — READ CAREFULLY. Past listings have hallucinated UPWARD (saying "all quests" for 35/179, "200+ collection log" for 21/1699, "275+ diary tasks" for 23/492). This is the single worst failure mode. Fix it by following these rules without exception:
 
 REPORT EXACT OR OMIT. There is no middle ground. For every numeric metric:
 - If the metric is clearly visible and strong enough to be a selling point, report the EXACT number from extractedData or hiscoresData. Nothing more.
@@ -163,10 +191,12 @@ Return the response as valid JSON in this exact structure. Fill extractedData FI
         "totalLevel": number or null,
         "totalXP": "exact string as visible" or null,
         "questPoints": number or null,
-        "achievementDiary": "brief description of what is visible (tiers, counts)" or null,
-        "combatAchievements": "brief description of what is visible" or null,
-        "collectionLog": "brief description of what is visible" or null,
-        "clueScrolls": "brief description of what is visible" or null,
+        "questsCompleted": "fraction string preserving the slash, e.g. '35/179', or null" (NOT the same as questPoints),
+        "achievementDiary": "fraction string '23/492' if shown that way on the overview, OR a tier description if the diary-detail page is shown, or null",
+        "combatAchievements": "fraction string '45/622' exactly as shown with the slash preserved, or null",
+        "collectionLog": "fraction string '21/1699' exactly as shown with the slash preserved, or null",
+        "clueScrolls": "fraction string(s) preserving slashes, e.g. 'easy 12/40, hard 5/35', or null",
+        "musicTracks": "fraction string '120/220' or null",
         "visibleItemsOrGear": ["list of clearly recognizable item names"] or null,
         "otherFacts": ["list of specific, clearly visible facts not captured above"] or null
       }
@@ -386,7 +416,11 @@ STEP 1 — Extract. For each original screenshot, fill out one entry in extracte
 
 STEP 2 — Write. Generate ONE hype / salesy listing with a title and a description. Every specific fact must come from extractedData or hiscoresData. Apply the NUMBER RULES strictly: REPORT EXACT OR OMIT. HARD CEILING. No "+" suffixes. No "all"/"most"/"plenty of"/"deep"/"extensive" for progress metrics. No "maxed" unless explicitly confirmed. If a metric is unflattering, OMIT it. Bullets are bare facts with at most ONE relevant emoji — no descriptive text after the fact.
 
-STEP 3 — Self-check. Before returning, verify every numeric claim in the title and every bullet against extractedData and hiscoresData. If any number in the listing is higher than the source, DELETE that bullet. If any banned vague phrase appears, REWRITE to exact or DELETE. Only return the cleaned JSON.
+STEP 3 — Self-check. Before returning, verify every numeric claim in the title and every bullet against extractedData and hiscoresData. If any number in the listing is higher than the source, DELETE that bullet. If any banned vague phrase appears, REWRITE to exact or DELETE.
+
+Also verify fractions specifically: if extractedData has a value like "21/1699", the listing must use only the 21, never the 1699 and never a fused number like 211699 or 210. If any listing number appears to be a fraction collision (suspiciously close to a numerator followed by a denominator digit), DELETE that bullet.
+
+Only return the cleaned JSON.
 
 Return ONLY the JSON object, no markdown fences, no preamble.`
     });
