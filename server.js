@@ -141,12 +141,15 @@ CONCRETE NEGATIVE EXAMPLES (never do any of these):
 Generate ONE listing in a hype / salesy tone, with a Title and a Description. The level of detail must scale with how much information was actually provided.
 
 TITLE RULES:
-- Rich and packed with verified selling points, not minimal. Aim for roughly 80 to 140 characters where data supports it.
+- Rich and packed with verified selling points, not minimal. Aim for roughly 80 to 160 characters where data supports it.
 - Lead with the clearest identifier: account type (if identifiable) plus combat level plus total level.
 - Then stack additional visible selling points separated by pipes: standout 99s, notable high skill levels, exact quest points, notable gear (if visible), ironman status, etc. Numbers in the title follow the same REPORT EXACT OR OMIT and HARD CEILING rules as the description.
-- Sprinkle relevant emojis (fire, bow, sword, lightning, gem) sparingly between sections. Do not spam them.
-- Only include selling points the screenshots verify. Do not pad titles with generic filler.
-- If the account is thin on data, a shorter title is fine, but still pack in everything real that is visible.
+- EVERY skill mentioned in the title MUST have its matching emoji right next to the level, using the skill-to-emoji map defined in the Description Rules below (Attack ⚔️, Strength 💪, Defence 🛡️, Hitpoints ❤️, Ranged 🏹, Magic 🧙, Prayer ✨, Slayer 💀, Fishing 🎣, Mining ⛏️, Woodcutting 🪓, Cooking 🍳, Herblore 🧪, Farming 🌱, Thieving 🗝️, Crafting ✂️, Smithing 🔨, Fletching 🪶, Agility 🏃, Runecraft 🌀, Hunter 🦌, Construction 🏠, Firemaking 🔥, Combat ⚔️, QP 📜, Total ⭐, Ironman ⛓️).
+- Format each skill section as "<level> <skill> <emoji>" or "<emoji> <level> <skill>". Examples: "99 Ranged 🏹 | 99 Magic 🧙 | 126 Combat ⚔️" or "⭐ 2050 Total | ⚔️ 126 Combat | 🏹 99 Ranged".
+- Use one emoji per skill section. No duplicate emojis on the same skill. Do not cluster emojis without a stat next to them.
+- A flavor emoji (🔥, ⚡, 💎) at the very start or very end of the title is optional and allowed.
+- Only include selling points the screenshots or hiscores verify. Do not pad titles with generic filler.
+- If the account is thin on data, a shorter title is fine, but still pack in everything real that is visible, still with emojis next to each stat.
 
 DESCRIPTION RULES (hype / salesy):
 - Energetic, persuasive tone. Short hyped intro line (1 sentence) encouraged, with 1 to 2 emojis for flavor (fire 🔥, lightning ⚡, gem 💎, money 💰, muscle 💪).
