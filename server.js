@@ -76,6 +76,14 @@ HISCORES LOOKUP (may or may not be provided by the user):
 - The hiscoresData object has this shape: { "accountType": "main|ironman|hardcore|ultimate|unknown", "skills": [{"name": "Attack", "rank": 12345, "level": 99, "xp": 13034431}, ...], "combatLevel": number|null }. combatLevel may be computed server-side from the skills.
 - NEVER include the provided account name in the listing. It is used only for the lookup.
 
+CONFIRMED ITEMS (user-verified checklist, may or may not be provided):
+- The user has a side panel of common OSRS items they can check off to assert the account owns them. If any are checked, the user message will include a CONFIRMED ITEMS list.
+- When CONFIRMED ITEMS are provided, those items are AUTHORITATIVE. The account has them. You do NOT need to verify them in the screenshots. You MUST include each confirmed item as its own bullet in the description (using the bare bullet + emoji format).
+- Prioritize the most prestigious confirmed items in the title too (e.g. Twisted Bow, Scythe of Vitur, Infernal Cape, Quiver, Torva set, Ancestral set). Use matching emojis: Twisted Bow 🏹, Scythe 🔪, Shadow 🌑, Fire Cape 🔥, Infernal Cape 🌋, Max Cape ⭐, Completionist Cape 🏆, Quiver 🎯, Ava's Assembler 🪶, Graceful 🕊️, Barrows Gloves 🧤, Slayer Helm 💀, Torva 🛡️, Ancestral 🧙, Masori 🏹, Virtus 🌀, Bandos 🐗, Armadyl 🦅, generic item 💎.
+- You may ALSO include items clearly visible in screenshots that are not on the confirmed list. But never invent items that are neither confirmed nor visible.
+- Do not describe or qualify confirmed items. A confirmed item becomes a bullet exactly like: "✓ Infernal Cape 🌋". No "(best in slot)", no "(great for bossing)", no adjectives.
+- Items in CONFIRMED ITEMS should generally each get their own bullet. Do not collapse multiple confirmed items into one bullet like "✓ Full endgame gear".
+
 FRACTION PARSING ON THE ACCOUNT OVERVIEW PAGE — READ THIS FIRST:
 
 The OSRS account overview page shows multiple progress metrics as FRACTIONS in the format "N/M" where N is the user's progress and M is the game-wide total. Examples:
@@ -318,6 +326,21 @@ app.post('/generate', upload.array('images', 20), async (req, res) => {
       return res.status(400).json({ error: 'No images uploaded. Please add at least one screenshot.' });
     }
 
+    let confirmedItems = [];
+    try {
+      const raw = req.body.selectedItems;
+      if (typeof raw === 'string' && raw.trim()) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          confirmedItems = parsed
+            .filter((i) => typeof i === 'string' && i.length > 0 && i.length < 120)
+            .slice(0, 100);
+        }
+      }
+    } catch (e) {
+      confirmedItems = [];
+    }
+
     const rawUsername = typeof req.body.username === 'string' ? req.body.username : '';
     let hiscoresData = null;
     let hiscoresError = null;
@@ -409,9 +432,13 @@ app.post('/generate', upload.array('images', 20), async (req, res) => {
       ? `\n\nHISCORES LOOKUP RESULT (authoritative for skill levels, total level, total XP, and combat level — trust over screenshots):\n${JSON.stringify(hiscoresData, null, 2)}`
       : '';
 
+    const confirmedItemsBlock = confirmedItems.length > 0
+      ? `\n\nCONFIRMED ITEMS (user-verified, authoritative — these ARE on the account regardless of whether they appear in any screenshot):\n- ${confirmedItems.join('\n- ')}`
+      : '';
+
     content.push({
       type: 'text',
-      text: `I attached ${files.length} OSRS account screenshot${files.length === 1 ? '' : 's'}, each potentially followed by up to 4 zoomed quadrant crops of that same screenshot. Quadrant crops are NOT separate screenshots — they show the same data at higher effective resolution to help you read small numbers. When filling extractedData.perScreenshot, produce ONE entry per original screenshot (imageIndex 1..${files.length}), not per quadrant. Use the quadrants to verify / correct what you read on the full view.${hiscoresBlock}
+      text: `I attached ${files.length} OSRS account screenshot${files.length === 1 ? '' : 's'}, each potentially followed by up to 4 zoomed quadrant crops of that same screenshot. Quadrant crops are NOT separate screenshots — they show the same data at higher effective resolution to help you read small numbers. When filling extractedData.perScreenshot, produce ONE entry per original screenshot (imageIndex 1..${files.length}), not per quadrant. Use the quadrants to verify / correct what you read on the full view.${hiscoresBlock}${confirmedItemsBlock}
 
 Follow this process STRICTLY:
 

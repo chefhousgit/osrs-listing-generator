@@ -71,6 +71,28 @@
     </section>
   </main>
 
+  <button id="gearToggle" class="gear-toggle" type="button" aria-label="Open gear checklist">
+    <span class="gear-toggle-icon">🎒</span>
+    <span class="gear-toggle-label">Gear</span>
+    <span id="gearCount" class="gear-count hidden">0</span>
+  </button>
+
+  <aside id="gearDrawer" class="gear-drawer" aria-hidden="true">
+    <header class="gear-drawer-header">
+      <h2>Confirm items</h2>
+      <button id="gearClose" class="gear-close" type="button" aria-label="Close">×</button>
+    </header>
+    <p class="gear-help">Check anything the account actually has. These override anything the model might misread on a screenshot.</p>
+    <input type="search" id="gearSearch" placeholder="Filter items..." />
+    <div id="gearList" class="gear-list"></div>
+    <footer class="gear-drawer-footer">
+      <button id="gearClearAll" type="button" class="secondary-btn">Clear all</button>
+      <span id="gearSelectedText" class="gear-selected-text">No items selected</span>
+    </footer>
+  </aside>
+
+  <div id="gearBackdrop" class="gear-backdrop"></div>
+
   <script src="app.js"></script>
 </body>
 </html>

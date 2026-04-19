@@ -1,5 +1,135 @@
 const usernameInput = document.getElementById('usernameInput');
 const fileInput = document.getElementById('fileInput');
+const gearToggle = document.getElementById('gearToggle');
+const gearDrawer = document.getElementById('gearDrawer');
+const gearBackdrop = document.getElementById('gearBackdrop');
+const gearClose = document.getElementById('gearClose');
+const gearList = document.getElementById('gearList');
+const gearSearch = document.getElementById('gearSearch');
+const gearCountEl = document.getElementById('gearCount');
+const gearClearAll = document.getElementById('gearClearAll');
+const gearSelectedText = document.getElementById('gearSelectedText');
+
+const GEAR_CATEGORIES = [
+  {
+    name: 'Capes',
+    items: ['Fire Cape', 'Infernal Cape', 'Max Cape', 'Completionist Cape', 'Mythical Cape', 'Imbued Saradomin Cape', 'Imbued Zamorak Cape', 'Imbued Guthix Cape', "Ava's Assembler", 'Dizana\'s Quiver', 'Ranger Cape']
+  },
+  {
+    name: 'BiS Weapons',
+    items: ['Scythe of Vitur', 'Twisted Bow', "Tumeken's Shadow", 'Ghrazi Rapier', 'Sanguinesti Staff', 'Toxic Blowpipe', 'Dragon Claws', 'Zaryte Crossbow', 'Abyssal Whip', 'Abyssal Tentacle', 'Saradomin Godsword', 'Armadyl Godsword', 'Bandos Godsword']
+  },
+  {
+    name: 'BiS Armor',
+    items: ['Torva (full set)', 'Ancestral (full set)', 'Masori (f) (full set)', 'Virtus (full set)', 'Bandos Chestplate', 'Bandos Tassets', 'Armadyl Chestplate', 'Armadyl Chainskirt', 'Avernic Defender', 'Primordial Boots', 'Pegasian Boots', 'Eternal Boots', 'Justiciar (full set)']
+  },
+  {
+    name: 'Amulets & Jewelry',
+    items: ['Amulet of Torture', 'Amulet of Anguish', 'Necklace of Anguish', 'Occult Necklace', 'Amulet of Fury', 'Tormented Bracelet', 'Berserker Ring (i)', 'Archers Ring (i)', 'Seers Ring (i)', 'Warrior Ring (i)', 'Ring of Endurance', 'Salve Amulet (ei)', 'Magus Ring', 'Bellator Ring', 'Ultor Ring', 'Venator Ring', 'Lightbearer']
+  },
+  {
+    name: 'Slayer',
+    items: ['Slayer Helmet (i)', 'Black Mask (i)', 'Ferocious Gloves', 'Bonecrusher Necklace', 'Tyrannical Ring (i)']
+  },
+  {
+    name: 'Quest & Diary Rewards',
+    items: ['Barrows Gloves', 'Dragon Defender', 'Fighter Torso', 'Void Knight (full set)', 'Elite Void (full set)', 'Ardougne Cloak 4', 'Morytania Legs 4', 'Fremennik Sea Boots 4', 'Desert Amulet 4', 'Explorer\'s Ring 4', 'Karamja Gloves 4', 'Varrock Armour 4', 'Wilderness Sword 4', 'Falador Shield 4', 'Kandarin Headgear 4', 'Western Banner 4', 'Rada\'s Blessing 4']
+  },
+  {
+    name: 'Skilling Outfits',
+    items: ['Graceful (full set)', 'Prospector (full set)', 'Angler (full set)', 'Lumberjack (full set)', 'Pyromancer (full set)', 'Farmer (full set)', "Zealot's (full set)", 'Rogue (full set)', 'Carpenter (full set)', 'Smith\'s uniform (full set)', 'Raiments of the Eye (Runecrafting)']
+  },
+  {
+    name: 'Clue & Rare',
+    items: ['Ranger Boots', '3rd Age item(s)', 'Bloodhound pet', 'Gilded armour pieces', 'Heavy Casket(s) banked', 'God cape (i) - MA2']
+  },
+  {
+    name: 'Other',
+    items: ['Rune Pouch', 'Divine Rune Pouch', 'Bottomless Compost Bucket', 'Book of the Dead', 'Sire Hilt', 'Dinh\'s Bulwark', 'Elder Maul', 'Hill Giant Club', 'Dragon Hunter Crossbow', 'Dragon Hunter Lance']
+  }
+];
+
+function buildGearList() {
+  gearList.innerHTML = '';
+  GEAR_CATEGORIES.forEach((cat) => {
+    const sec = document.createElement('section');
+    sec.className = 'gear-section';
+    const h = document.createElement('h3');
+    h.textContent = cat.name;
+    sec.appendChild(h);
+    cat.items.forEach((item) => {
+      const label = document.createElement('label');
+      label.className = 'gear-checkbox';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.value = item;
+      label.appendChild(input);
+      label.appendChild(document.createTextNode(' ' + item));
+      sec.appendChild(label);
+    });
+    gearList.appendChild(sec);
+  });
+  gearList.addEventListener('change', (e) => {
+    if (e.target && e.target.matches('input[type=checkbox]')) updateGearCount();
+  });
+}
+
+function updateGearCount() {
+  const checked = gearList.querySelectorAll('input[type=checkbox]:checked');
+  const n = checked.length;
+  if (n > 0) {
+    gearCountEl.textContent = n;
+    gearCountEl.classList.remove('hidden');
+    gearSelectedText.textContent = n + ' item' + (n === 1 ? '' : 's') + ' selected';
+  } else {
+    gearCountEl.classList.add('hidden');
+    gearSelectedText.textContent = 'No items selected';
+  }
+}
+
+function getSelectedItems() {
+  return Array.from(gearList.querySelectorAll('input[type=checkbox]:checked')).map((c) => c.value);
+}
+
+function openGearDrawer() {
+  gearDrawer.classList.add('open');
+  gearDrawer.setAttribute('aria-hidden', 'false');
+  gearBackdrop.classList.add('visible');
+}
+
+function closeGearDrawer() {
+  gearDrawer.classList.remove('open');
+  gearDrawer.setAttribute('aria-hidden', 'true');
+  gearBackdrop.classList.remove('visible');
+}
+
+gearToggle.addEventListener('click', () => {
+  if (gearDrawer.classList.contains('open')) closeGearDrawer();
+  else openGearDrawer();
+});
+gearClose.addEventListener('click', closeGearDrawer);
+gearBackdrop.addEventListener('click', closeGearDrawer);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && gearDrawer.classList.contains('open')) closeGearDrawer();
+});
+
+gearClearAll.addEventListener('click', () => {
+  gearList.querySelectorAll('input[type=checkbox]:checked').forEach((c) => { c.checked = false; });
+  updateGearCount();
+});
+
+gearSearch.addEventListener('input', () => {
+  const q = gearSearch.value.trim().toLowerCase();
+  gearList.querySelectorAll('.gear-checkbox').forEach((label) => {
+    label.style.display = !q || label.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+  gearList.querySelectorAll('.gear-section').forEach((sec) => {
+    const any = Array.from(sec.querySelectorAll('.gear-checkbox')).some((l) => l.style.display !== 'none');
+    sec.style.display = any ? '' : 'none';
+  });
+});
+
+buildGearList();
 const dropzone = document.getElementById('dropzone');
 const browseBtn = document.getElementById('browseBtn');
 const previewSection = document.getElementById('previewSection');
@@ -354,6 +484,8 @@ generateBtn.addEventListener('click', async () => {
   selectedFiles.forEach((f) => formData.append('images', f));
   const username = usernameInput.value.trim();
   if (username) formData.append('username', username);
+  const selectedItems = getSelectedItems();
+  if (selectedItems.length > 0) formData.append('selectedItems', JSON.stringify(selectedItems));
 
   try {
     const res = await fetch('/generate', { method: 'POST', body: formData });
