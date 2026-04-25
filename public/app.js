@@ -33,7 +33,7 @@ const GEAR_CATEGORIES = [
   },
   {
     name: 'Quest & Diary Rewards',
-    items: ['Barrows Gloves', 'Dragon Defender', 'Fighter Torso', 'Void Knight (full set)', 'Elite Void (full set)', 'Ardougne Cloak 4', 'Morytania Legs 4', 'Fremennik Sea Boots 4', 'Desert Amulet 4', 'Explorer\'s Ring 4', 'Karamja Gloves 4', 'Varrock Armour 4', 'Wilderness Sword 4', 'Falador Shield 4', 'Kandarin Headgear 4', 'Western Banner 4', 'Rada\'s Blessing 4']
+    items: ['Barrows Gloves', 'Mithril Gloves', 'Dragon Defender', 'Fighter Torso', 'Void Knight (full set)', 'Elite Void (full set)', 'Ardougne Cloak 4', 'Morytania Legs 4', 'Fremennik Sea Boots 4', 'Desert Amulet 4', 'Explorer\'s Ring 4', 'Karamja Gloves 4', 'Varrock Armour 4', 'Wilderness Sword 4', 'Falador Shield 4', 'Kandarin Headgear 4', 'Western Banner 4', 'Rada\'s Blessing 4']
   },
   {
     name: 'Skilling Outfits',
