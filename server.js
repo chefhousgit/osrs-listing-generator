@@ -570,6 +570,34 @@ Return ONLY the JSON object, no markdown fences, no preamble.`
     if (hiscoresData) parsed.hiscoresUsed = hiscoresData;
     if (hiscoresError) parsed.hiscoresError = hiscoresError;
 
+    const stripEmojis = (str) => {
+      if (typeof str !== 'string') return str;
+      return str
+        .replace(/[\u{1F300}-\u{1FAFF}]/gu, '')
+        .replace(/[\u{1F000}-\u{1F2FF}]/gu, '')
+        .replace(/[\u{2600}-\u{27BF}]/gu, (ch) => (ch === '✓' || ch === '✔' ? ch : ''))
+        .replace(/[\u{2B00}-\u{2BFF}]/gu, '')
+        .replace(/[\u{2900}-\u{297F}]/gu, '')
+        .replace(/️/g, '')
+        .replace(/‍/g, '')
+        .replace(/[ \t]+\|/g, ' |')
+        .replace(/\|[ \t]+/g, '| ')
+        .replace(/\|\s*\|/g, '|')
+        .replace(/^\s*\|\s*/gm, '')
+        .replace(/\s*\|\s*$/gm, '')
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/[ \t]+\n/g, '\n')
+        .trim();
+    };
+
+    const applyEmojiStripping = (obj) => {
+      if (!obj) return;
+      if (!titleEmojis && typeof obj.title === 'string') obj.title = stripEmojis(obj.title);
+      if (!descEmojis && typeof obj.description === 'string') obj.description = stripEmojis(obj.description);
+    };
+    applyEmojiStripping(parsed.listing);
+    if (parsed.versions) Object.values(parsed.versions).forEach(applyEmojiStripping);
+
     const appendFooter = (obj) => {
       if (obj && typeof obj.description === 'string') {
         obj.description = obj.description.replace(/\s+$/, '') + LISTING_FOOTER;

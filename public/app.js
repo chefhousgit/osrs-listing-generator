@@ -72,22 +72,21 @@ function buildGearList() {
       const titleStar = document.createElement('button');
       titleStar.type = 'button';
       titleStar.className = 'gear-title-star';
-      titleStar.textContent = '★';
-      titleStar.title = 'Also include this item in the listing title';
+      titleStar.innerHTML = '<span class="star-icon">★</span><span class="star-label">Title</span>';
+      titleStar.title = 'Also feature this item in the listing TITLE (not just the description)';
       titleStar.setAttribute('aria-pressed', 'false');
-      titleStar.disabled = true;
       titleStar.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (titleStar.disabled) return;
         const on = titleStar.classList.toggle('active');
         titleStar.setAttribute('aria-pressed', on ? 'true' : 'false');
+        if (on && !input.checked) {
+          input.checked = true;
+          updateGearCount();
+        }
       });
 
       input.addEventListener('change', () => {
-        if (input.checked) {
-          titleStar.disabled = false;
-        } else {
-          titleStar.disabled = true;
+        if (!input.checked && titleStar.classList.contains('active')) {
           titleStar.classList.remove('active');
           titleStar.setAttribute('aria-pressed', 'false');
         }
@@ -154,10 +153,9 @@ document.addEventListener('keydown', (e) => {
 
 gearClearAll.addEventListener('click', () => {
   gearList.querySelectorAll('input[type=checkbox]:checked').forEach((c) => { c.checked = false; });
-  gearList.querySelectorAll('.gear-title-star').forEach((s) => {
+  gearList.querySelectorAll('.gear-title-star.active').forEach((s) => {
     s.classList.remove('active');
     s.setAttribute('aria-pressed', 'false');
-    s.disabled = true;
   });
   updateGearCount();
 });

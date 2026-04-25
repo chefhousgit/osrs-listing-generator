@@ -763,35 +763,35 @@ html, body {
 }
 
 .gear-title-star {
-  background: none;
-  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
   color: var(--text-dim);
-  font-size: 0.95rem;
+  font-size: 0.72rem;
   line-height: 1;
-  padding: 4px 7px;
-  border-radius: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
   cursor: pointer;
   flex-shrink: 0;
-  opacity: 0.35;
-  transition: opacity 0.15s, color 0.15s, background 0.15s, border-color 0.15s;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 
-.gear-title-star:not(:disabled):hover {
-  opacity: 1;
-  color: var(--gold);
-  background: var(--panel-2);
-  border-color: var(--border);
+.gear-title-star .star-icon {
+  font-size: 0.85rem;
 }
 
-.gear-title-star.active {
-  opacity: 1;
+.gear-title-star:hover {
   color: var(--gold);
-  background: var(--panel-2);
   border-color: var(--gold-dim);
 }
 
-.gear-title-star:disabled {
-  cursor: not-allowed;
+.gear-title-star.active {
+  color: #1a1410;
+  background: var(--gold);
+  border-color: var(--gold-dim);
+  font-weight: 700;
 }
 
 .gear-drawer-footer {
