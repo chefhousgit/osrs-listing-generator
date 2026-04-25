@@ -189,6 +189,45 @@ html, body {
   display: flex;
   gap: 12px;
   margin-top: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.toggle-btn .toggle-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.toggle-btn.active {
+  color: var(--gold);
+  border-color: var(--gold-dim);
+}
+
+.toggle-btn.active .toggle-dot {
+  background: var(--gold);
+  box-shadow: 0 0 6px rgba(228, 176, 74, 0.7);
+}
+
+.toggle-btn:hover {
+  background: var(--panel-2);
 }
 
 .primary-btn, .secondary-btn {
@@ -476,7 +515,8 @@ html, body {
   margin-top: 4px;
 }
 
-.version-card pre {
+.version-card pre,
+.version-card textarea {
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -487,16 +527,32 @@ html, body {
   font-family: inherit;
   font-size: 0.9rem;
   color: var(--text);
-  max-height: 260px;
+  max-height: 360px;
   overflow-y: auto;
+}
+
+.version-card textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 220px;
+  line-height: 1.5;
+}
+
+.version-card textarea:focus {
+  outline: none;
+  border-color: var(--gold);
 }
 
 .output-title {
   min-height: 40px;
 }
 
-.output-desc {
-  min-height: 100px;
+.edit-hint {
+  color: var(--gold-dim);
+  font-size: 0.7rem;
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 4px;
 }
 
 .copy-btn {
@@ -676,6 +732,13 @@ html, body {
   padding-bottom: 4px;
 }
 
+.gear-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
 .gear-checkbox {
   display: flex;
   align-items: center;
@@ -684,6 +747,8 @@ html, body {
   cursor: pointer;
   font-size: 0.9rem;
   color: var(--text);
+  flex: 1;
+  min-width: 0;
 }
 
 .gear-checkbox input {
@@ -695,6 +760,38 @@ html, body {
 
 .gear-checkbox:hover {
   color: var(--gold);
+}
+
+.gear-title-star {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 4px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0.35;
+  transition: opacity 0.15s, color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.gear-title-star:not(:disabled):hover {
+  opacity: 1;
+  color: var(--gold);
+  background: var(--panel-2);
+  border-color: var(--border);
+}
+
+.gear-title-star.active {
+  opacity: 1;
+  color: var(--gold);
+  background: var(--panel-2);
+  border-color: var(--gold-dim);
+}
+
+.gear-title-star:disabled {
+  cursor: not-allowed;
 }
 
 .gear-drawer-footer {

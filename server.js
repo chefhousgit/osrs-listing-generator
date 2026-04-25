@@ -351,6 +351,24 @@ app.post('/generate', upload.array('images', 20), async (req, res) => {
       confirmedItems = [];
     }
 
+    let titleItems = [];
+    try {
+      const raw = req.body.titleItems;
+      if (typeof raw === 'string' && raw.trim()) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          titleItems = parsed
+            .filter((i) => typeof i === 'string' && i.length > 0 && i.length < 120)
+            .slice(0, 30);
+        }
+      }
+    } catch (e) {
+      titleItems = [];
+    }
+
+    const titleEmojis = String(req.body.titleEmojis || 'true') !== 'false';
+    const descEmojis = String(req.body.descEmojis || 'true') !== 'false';
+
     const rawUsername = typeof req.body.username === 'string' ? req.body.username : '';
     let hiscoresData = null;
     let hiscoresError = null;
@@ -446,9 +464,24 @@ app.post('/generate', upload.array('images', 20), async (req, res) => {
       ? `\n\nCONFIRMED ITEMS (user-verified, authoritative — these ARE on the account regardless of whether they appear in any screenshot):\n- ${confirmedItems.join('\n- ')}`
       : '';
 
+    const titleItemsBlock = titleItems.length > 0
+      ? `\n\nTITLE-PRIORITY ITEMS (the user has explicitly requested these be featured in the listing TITLE in addition to appearing as bullets in the description). You MUST include each of the following in the title, formatted naturally with the rest of the title content:\n- ${titleItems.join('\n- ')}`
+      : '';
+
+    const emojiRules = [];
+    if (!titleEmojis) {
+      emojiRules.push('TITLE EMOJIS ARE DISABLED FOR THIS REQUEST. Override any prior instruction about emojis in the title. The "title" field MUST NOT contain ANY emojis or pictographic characters at all. Use plain text only — no ⚔️, no 🏹, no 🔥, no ⭐, no 📜, no decorative symbols. Separate sections with simple " | " pipes. Numbers and skill names alone are fine. If the system prompt says emojis are required next to skill levels in the title, ignore that instruction for this response only.');
+    }
+    if (!descEmojis) {
+      emojiRules.push('DESCRIPTION EMOJIS ARE DISABLED FOR THIS REQUEST. Override any prior instruction about emojis in the description. The "description" field MUST NOT contain ANY emojis or pictographic characters anywhere in the body — no skill emojis, no flavor emojis, no fire/lightning/gem decorations. Use plain "✓" check-mark bullets without any trailing or leading emoji. (The fixed footer that the server appends after your response is exempt — do not worry about it.) If the system prompt says emojis go on bullets, ignore that for this response only.');
+    }
+    const emojiRulesBlock = emojiRules.length > 0
+      ? `\n\nEMOJI OVERRIDES FOR THIS REQUEST (these REPLACE the corresponding rules in the system prompt):\n${emojiRules.map((r) => '- ' + r).join('\n')}`
+      : '';
+
     content.push({
       type: 'text',
-      text: `I attached ${files.length} OSRS account screenshot${files.length === 1 ? '' : 's'}, each potentially followed by up to 4 zoomed quadrant crops of that same screenshot. Quadrant crops are NOT separate screenshots — they show the same data at higher effective resolution to help you read small numbers. When filling extractedData.perScreenshot, produce ONE entry per original screenshot (imageIndex 1..${files.length}), not per quadrant. Use the quadrants to verify / correct what you read on the full view.${hiscoresBlock}${confirmedItemsBlock}
+      text: `I attached ${files.length} OSRS account screenshot${files.length === 1 ? '' : 's'}, each potentially followed by up to 4 zoomed quadrant crops of that same screenshot. Quadrant crops are NOT separate screenshots — they show the same data at higher effective resolution to help you read small numbers. When filling extractedData.perScreenshot, produce ONE entry per original screenshot (imageIndex 1..${files.length}), not per quadrant. Use the quadrants to verify / correct what you read on the full view.${hiscoresBlock}${confirmedItemsBlock}${titleItemsBlock}${emojiRulesBlock}
 
 Follow this process STRICTLY:
 

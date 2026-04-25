@@ -38,6 +38,14 @@
     <section class="actions">
       <button id="generateBtn" class="primary-btn" disabled>Generate Listings</button>
       <button id="clearBtn" class="secondary-btn">Clear</button>
+      <button id="titleEmojiToggle" class="toggle-btn active" type="button" aria-pressed="true" title="Include emojis in the generated title">
+        <span class="toggle-dot"></span>
+        <span class="toggle-label">Title emojis: <strong id="titleEmojiState">On</strong></span>
+      </button>
+      <button id="descEmojiToggle" class="toggle-btn active" type="button" aria-pressed="true" title="Include emojis in the generated description">
+        <span class="toggle-dot"></span>
+        <span class="toggle-label">Description emojis: <strong id="descEmojiState">On</strong></span>
+      </button>
     </section>
 
     <section id="statusBox" class="status-box hidden"></section>
@@ -55,8 +63,8 @@
           <label>Title</label>
           <pre class="output-title"></pre>
           <button class="copy-btn" data-copy="title">Copy Title</button>
-          <label>Description</label>
-          <pre class="output-desc"></pre>
+          <label>Description <span class="edit-hint">(editable)</span></label>
+          <textarea class="output-desc" spellcheck="false"></textarea>
           <button class="copy-btn" data-copy="desc">Copy Description</button>
         </article>
       </div>
@@ -82,7 +90,7 @@
       <h2>Confirm items</h2>
       <button id="gearClose" class="gear-close" type="button" aria-label="Close">×</button>
     </header>
-    <p class="gear-help">Check anything the account actually has. These override anything the model might misread on a screenshot.</p>
+    <p class="gear-help">Check anything the account actually has. These override anything the model might misread on a screenshot. Tap the ★ next to a checked item to also force it into the listing title.</p>
     <input type="search" id="gearSearch" placeholder="Filter items..." />
     <div id="gearList" class="gear-list"></div>
     <footer class="gear-drawer-footer">

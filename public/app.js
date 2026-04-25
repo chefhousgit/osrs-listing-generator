@@ -58,6 +58,9 @@ function buildGearList() {
     h.textContent = cat.name;
     sec.appendChild(h);
     cat.items.forEach((item) => {
+      const row = document.createElement('div');
+      row.className = 'gear-row';
+
       const label = document.createElement('label');
       label.className = 'gear-checkbox';
       const input = document.createElement('input');
@@ -65,7 +68,34 @@ function buildGearList() {
       input.value = item;
       label.appendChild(input);
       label.appendChild(document.createTextNode(' ' + item));
-      sec.appendChild(label);
+
+      const titleStar = document.createElement('button');
+      titleStar.type = 'button';
+      titleStar.className = 'gear-title-star';
+      titleStar.textContent = '★';
+      titleStar.title = 'Also include this item in the listing title';
+      titleStar.setAttribute('aria-pressed', 'false');
+      titleStar.disabled = true;
+      titleStar.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (titleStar.disabled) return;
+        const on = titleStar.classList.toggle('active');
+        titleStar.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+
+      input.addEventListener('change', () => {
+        if (input.checked) {
+          titleStar.disabled = false;
+        } else {
+          titleStar.disabled = true;
+          titleStar.classList.remove('active');
+          titleStar.setAttribute('aria-pressed', 'false');
+        }
+      });
+
+      row.appendChild(label);
+      row.appendChild(titleStar);
+      sec.appendChild(row);
     });
     gearList.appendChild(sec);
   });
@@ -89,6 +119,15 @@ function updateGearCount() {
 
 function getSelectedItems() {
   return Array.from(gearList.querySelectorAll('input[type=checkbox]:checked')).map((c) => c.value);
+}
+
+function getTitleItems() {
+  return Array.from(gearList.querySelectorAll('.gear-row')).reduce((acc, row) => {
+    const cb = row.querySelector('input[type=checkbox]');
+    const star = row.querySelector('.gear-title-star');
+    if (cb && cb.checked && star && star.classList.contains('active')) acc.push(cb.value);
+    return acc;
+  }, []);
 }
 
 function openGearDrawer() {
@@ -115,16 +154,23 @@ document.addEventListener('keydown', (e) => {
 
 gearClearAll.addEventListener('click', () => {
   gearList.querySelectorAll('input[type=checkbox]:checked').forEach((c) => { c.checked = false; });
+  gearList.querySelectorAll('.gear-title-star').forEach((s) => {
+    s.classList.remove('active');
+    s.setAttribute('aria-pressed', 'false');
+    s.disabled = true;
+  });
   updateGearCount();
 });
 
 gearSearch.addEventListener('input', () => {
   const q = gearSearch.value.trim().toLowerCase();
-  gearList.querySelectorAll('.gear-checkbox').forEach((label) => {
-    label.style.display = !q || label.textContent.toLowerCase().includes(q) ? '' : 'none';
+  gearList.querySelectorAll('.gear-row').forEach((row) => {
+    const label = row.querySelector('.gear-checkbox');
+    const text = label ? label.textContent.toLowerCase() : '';
+    row.style.display = !q || text.includes(q) ? '' : 'none';
   });
   gearList.querySelectorAll('.gear-section').forEach((sec) => {
-    const any = Array.from(sec.querySelectorAll('.gear-checkbox')).some((l) => l.style.display !== 'none');
+    const any = Array.from(sec.querySelectorAll('.gear-row')).some((r) => r.style.display !== 'none');
     sec.style.display = any ? '' : 'none';
   });
 });
@@ -143,6 +189,25 @@ const metaRow = document.getElementById('metaRow');
 const notesBox = document.getElementById('notesBox');
 const auditPanel = document.getElementById('auditPanel');
 const auditBody = document.getElementById('auditBody');
+
+const titleEmojiToggle = document.getElementById('titleEmojiToggle');
+const titleEmojiState = document.getElementById('titleEmojiState');
+const descEmojiToggle = document.getElementById('descEmojiToggle');
+const descEmojiState = document.getElementById('descEmojiState');
+let titleEmojis = true;
+let descEmojis = true;
+titleEmojiToggle.addEventListener('click', () => {
+  titleEmojis = !titleEmojis;
+  titleEmojiToggle.classList.toggle('active', titleEmojis);
+  titleEmojiToggle.setAttribute('aria-pressed', titleEmojis ? 'true' : 'false');
+  titleEmojiState.textContent = titleEmojis ? 'On' : 'Off';
+});
+descEmojiToggle.addEventListener('click', () => {
+  descEmojis = !descEmojis;
+  descEmojiToggle.classList.toggle('active', descEmojis);
+  descEmojiToggle.setAttribute('aria-pressed', descEmojis ? 'true' : 'false');
+  descEmojiState.textContent = descEmojis ? 'On' : 'Off';
+});
 
 let selectedFiles = [];
 
@@ -241,7 +306,8 @@ function hideStatus() {
 function clearCards() {
   document.querySelectorAll('.version-card').forEach((card) => {
     card.querySelector('.output-title').textContent = '';
-    card.querySelector('.output-desc').textContent = '';
+    const desc = card.querySelector('.output-desc');
+    if (desc) desc.value = '';
   });
   metaRow.innerHTML = '';
   notesBox.classList.add('hidden');
@@ -441,7 +507,7 @@ function renderResults(data) {
   const card = document.querySelector('.version-card[data-version="hype"]');
   if (card) {
     card.querySelector('.output-title').textContent = listing.title || '';
-    card.querySelector('.output-desc').textContent = listing.description || '';
+    card.querySelector('.output-desc').value = listing.description || '';
   }
 
   if (data.hiscoresUsed) {
@@ -486,6 +552,10 @@ generateBtn.addEventListener('click', async () => {
   if (username) formData.append('username', username);
   const selectedItems = getSelectedItems();
   if (selectedItems.length > 0) formData.append('selectedItems', JSON.stringify(selectedItems));
+  const titleItems = getTitleItems();
+  if (titleItems.length > 0) formData.append('titleItems', JSON.stringify(titleItems));
+  formData.append('titleEmojis', titleEmojis ? 'true' : 'false');
+  formData.append('descEmojis', descEmojis ? 'true' : 'false');
 
   try {
     const res = await fetch('/generate', { method: 'POST', body: formData });
@@ -512,7 +582,7 @@ document.querySelectorAll('.copy-btn').forEach((btn) => {
     const card = btn.closest('.version-card');
     const which = btn.getAttribute('data-copy');
     const target = card.querySelector(which === 'title' ? '.output-title' : '.output-desc');
-    const text = target.textContent || '';
+    const text = (which === 'desc' ? target.value : target.textContent) || '';
     if (!text.trim()) return;
     try {
       await navigator.clipboard.writeText(text);
