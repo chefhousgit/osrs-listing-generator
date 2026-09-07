@@ -159,27 +159,16 @@ TITLE RULES:
 - Only include selling points the screenshots or hiscores verify. Do not pad titles with generic filler.
 - If the account is thin on data, a shorter title is fine, but still pack in everything real that is visible, still with emojis next to each stat.
 
-DESCRIPTION RULES (hype / salesy):
-- Energetic, persuasive tone. Short hyped intro line (1 sentence) encouraged, with 1 to 2 emojis for flavor (fire 🔥, lightning ⚡, gem 💎, money 💰, muscle 💪).
-- Use bullet points with the plain check-mark symbol ✓ for verified selling points.
-- Each bullet may include ONE relevant emoji in addition to the ✓. Either before the ✓ or after the fact. Examples of the exact format:
-  - "✓ 99 Ranged 🏹"
-  - "🔥 ✓ 99 Strength"
-  - "✓ 99 Magic 🧙"
-  - "✓ 126 Combat ⚔️"
-  - "✓ 35 QP 📜"
-  - "✓ Maxed combat 💪" (only if all 7 combat skills are confirmed at 99)
-- BULLET CONTENT IS STRICT: the fact itself must be bare. No descriptive text, no sales tag, no dash with explanation, no parenthetical, no adjectives tacked on the end. The emoji is decoration only, not an excuse to add words.
-  - WRONG: "✓ 99 Ranged - deadly in PvP"
-  - WRONG: "✓ 99 Ranged, great for bossing 🏹"
-  - WRONG: "✓ 150+ QP (most quests completed)"
-  - WRONG: "✓ 99 Ranged 🏹 PvP ready"
-- Map skill emojis sensibly: Attack ⚔️, Strength 💪, Defence 🛡️, Hitpoints ❤️, Ranged 🏹, Magic 🧙, Prayer ✨, Slayer 💀, Fishing 🎣, Mining ⛏️, Woodcutting 🪓, Cooking 🍳, Herblore 🧪, Farming 🌱, Thieving 🗝️, Crafting ✂️, Smithing 🔨, Fletching 🪶, Agility 🏃, Runecraft 🌀, Hunter 🦌, Construction 🏠, Firemaking 🔥, Combat ⚔️, QP 📜, Total level ⭐, Ironman ⛓️.
-- One fact per bullet. Do not combine two stats into one bullet.
-- Only hype up features that are actually visible in the screenshots (or returned by the hiscores lookup if one was included). Every bullet must correspond to a fact in extractedData or hiscoresData.
-- Skip any skill at level 1 through 9. Do not bullet-list low levels.
-- Apply the VAGUENESS AND ROUNDING RULES above to every bullet and to the title.
-- A short hyped closing line is allowed (1 sentence max) with 1 emoji, but do not fabricate anything in it.
+DESCRIPTION RULES (simple):
+- The description is EXACTLY ONE sentence. No bullets, no lists, no headings, no second sentence, no emojis.
+- That sentence is a short, general, honest summary of what kind of account this is and what it is good for. It names the account type when known and speaks in general terms about what has been trained or built up. It does NOT list individual skill levels or numbers; the title already carries the numbers.
+- Good examples of the whole description:
+  - "Great foundation for an ironman account with many skills trained and resources banked."
+  - "Solid mid-level main with balanced combat stats and a good start on quests."
+  - "Well-rounded skiller with several gathering skills trained up and ready to keep building."
+- Do not claim anything the screenshots or hiscores do not support (for example do not say "resources banked" unless a bank screenshot shows it). Keep it vague rather than wrong.
+- Never use "maxed", "max", "complete", or "all" in this sentence. Prefer soft wording like "several skills trained", "solid combat stats", "good progress".
+- The server appends a fixed footer (clean account line, handover details, terms) after your sentence. Do NOT write any of that yourself.
 
 Important rules:
 - NEVER include the account's username
@@ -235,15 +224,43 @@ Return the response as valid JSON in this exact structure. Fill extractedData FI
 
 Return ONLY the JSON, no markdown fences, no preamble.`;
 
-const LISTING_FOOTER = `
+const LISTING_TERMS = `🧾 Terms and Conditions:
+
+It is your responsibility to secure the account including changing account details such as the email and password. I am not responsible for bans or account locks that happen after the account is in your possession (once you have logged into the account). This includes macro bans, RWT bans, or any rule breaking bans. No refunds or replacements will be provided for bans where the ban date is on or after the sale date, all accounts are well rested.`;
+
+const LISTING_FOOTERS = {
+  legacy: `
 
 ✅ Clean account, no bans
-🎮 Login Method: Jagex Launcher
 
-📦 Upon purchase you will receive:
+Upon purchase you will receive:
+
+📧 The login email (creatable, outlook)
+🔑 The legacy login password
+
+${LISTING_TERMS}`,
+  jagex: `
+
+✅ Clean account, no bans
+
+Upon purchase you will receive:
+
 📧 The email
 🔑 The password
-🔐 A secret key (used to generate Authenticator codes)`;
+🔐 A secret key (used to generate Authenticator codes)
+
+${LISTING_TERMS}`
+};
+
+const ACCOUNT_TYPES = {
+  main: { label: 'Main', titleLead: 'Main', noun: 'main account' },
+  ironman: { label: 'Ironman', titleLead: 'Ironman', noun: 'ironman account' },
+  hcim: { label: 'Hardcore Ironman', titleLead: 'Hardcore Ironman | HCIM', noun: 'hardcore ironman account' },
+  uim: { label: 'Ultimate Ironman', titleLead: 'Ultimate Ironman | UIM', noun: 'ultimate ironman account' }
+};
+
+// Which hiscore board to try first for each user-selected account type.
+const ACCOUNT_TYPE_BOARD = { main: 'main', ironman: 'ironman', hcim: 'hardcore', uim: 'ultimate' };
 
 const HISCORE_SKILLS = [
   'Overall', 'Attack', 'Defence', 'Strength', 'Hitpoints', 'Ranged', 'Prayer',
@@ -288,7 +305,7 @@ function parseHiscoreCsv(text) {
   return skills;
 }
 
-async function lookupHiscores(username) {
+async function lookupHiscores(username, preferredBoard) {
   const trimmed = String(username || '').trim();
   if (!trimmed) return null;
   if (!/^[A-Za-z0-9 _-]{1,12}$/.test(trimmed)) {
@@ -296,7 +313,11 @@ async function lookupHiscores(username) {
   }
   const encoded = encodeURIComponent(trimmed);
 
-  for (const ep of HISCORE_ENDPOINTS) {
+  const endpoints = preferredBoard
+    ? [...HISCORE_ENDPOINTS].sort((a, b) => (a.type === preferredBoard ? -1 : 0) - (b.type === preferredBoard ? -1 : 0))
+    : HISCORE_ENDPOINTS;
+
+  for (const ep of endpoints) {
     try {
       const res = await fetch(`${ep.url}?player=${encoded}`, {
         method: 'GET',
@@ -369,15 +390,39 @@ app.post('/generate', upload.array('images', 20), async (req, res) => {
     const titleEmojis = String(req.body.titleEmojis || 'true') !== 'false';
     const descEmojis = String(req.body.descEmojis || 'true') !== 'false';
 
+    const rawAccountType = String(req.body.accountType || 'auto').toLowerCase();
+    const accountType = ACCOUNT_TYPES[rawAccountType] ? rawAccountType : null;
+
+    const loginMethod = String(req.body.loginMethod || 'legacy').toLowerCase() === 'jagex' ? 'jagex' : 'legacy';
+
+    let hiddenSkills = [];
+    try {
+      const raw = req.body.hiddenSkills;
+      if (typeof raw === 'string' && raw.trim()) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          hiddenSkills = parsed
+            .filter((s) => typeof s === 'string' && HISCORE_SKILLS.includes(s))
+            .slice(0, HISCORE_SKILLS.length);
+        }
+      }
+    } catch (e) {
+      hiddenSkills = [];
+    }
+
     const rawUsername = typeof req.body.username === 'string' ? req.body.username : '';
     let hiscoresData = null;
     let hiscoresError = null;
     if (rawUsername.trim()) {
-      const result = await lookupHiscores(rawUsername);
+      const result = await lookupHiscores(rawUsername, accountType ? ACCOUNT_TYPE_BOARD[accountType] : null);
       if (result && result.error) {
         hiscoresError = result.error;
       } else if (result) {
         hiscoresData = result;
+        if (hiddenSkills.length > 0) {
+          // Never hand the model levels the user chose to black out on the screenshot.
+          hiscoresData = { ...result, skills: result.skills.filter((s) => !hiddenSkills.includes(s.name)) };
+        }
       }
     }
 
@@ -468,12 +513,20 @@ app.post('/generate', upload.array('images', 20), async (req, res) => {
       ? `\n\nTITLE-PRIORITY ITEMS (the user has explicitly requested these be featured in the listing TITLE in addition to appearing as bullets in the description). You MUST include each of the following in the title, formatted naturally with the rest of the title content:\n- ${titleItems.join('\n- ')}`
       : '';
 
+    const accountTypeBlock = accountType
+      ? `\n\nACCOUNT TYPE (user-confirmed, authoritative — overrides anything you infer from the screenshots): ${ACCOUNT_TYPES[accountType].label}.\n- The title MUST lead with the total level (if known) followed by "${ACCOUNT_TYPES[accountType].titleLead}", for example "1007 Total Level ${ACCOUNT_TYPES[accountType].titleLead} | 84 Firemaking 🔥 | ...". If the total level is unknown, lead with "${ACCOUNT_TYPES[accountType].titleLead}" directly.\n- The description sentence must refer to it as a ${ACCOUNT_TYPES[accountType].noun}.\n- Set the top-level "accountType" field to "${ACCOUNT_TYPES[accountType].label}".\n- Never call it anything else and never say the type is unclear.`
+      : '';
+
+    const hiddenSkillsBlock = hiddenSkills.length > 0
+      ? `\n\nREDACTED SKILLS: the user has deliberately blacked out these skills on the stats screenshot: ${hiddenSkills.join(', ')}. Treat them as if they do not exist. Do NOT mention them anywhere in the title or description, do NOT list them in extractedData, do NOT guess their levels, and do NOT describe any black boxes you see.`
+      : '';
+
     const emojiRules = [];
     if (!titleEmojis) {
       emojiRules.push('TITLE EMOJIS ARE DISABLED FOR THIS REQUEST. Override any prior instruction about emojis in the title. The "title" field MUST NOT contain ANY emojis or pictographic characters at all. Use plain text only — no ⚔️, no 🏹, no 🔥, no ⭐, no 📜, no decorative symbols. Separate sections with simple " | " pipes. Numbers and skill names alone are fine. If the system prompt says emojis are required next to skill levels in the title, ignore that instruction for this response only.');
     }
     if (!descEmojis) {
-      emojiRules.push('DESCRIPTION EMOJIS ARE DISABLED FOR THIS REQUEST. Override any prior instruction about emojis in the description. The "description" field MUST NOT contain ANY emojis or pictographic characters anywhere in the body — no skill emojis, no flavor emojis, no fire/lightning/gem decorations. Use plain "✓" check-mark bullets without any trailing or leading emoji. (The fixed footer that the server appends after your response is exempt — do not worry about it.) If the system prompt says emojis go on bullets, ignore that for this response only.');
+      emojiRules.push('DESCRIPTION EMOJIS ARE DISABLED FOR THIS REQUEST. The "description" sentence MUST NOT contain ANY emojis or pictographic characters. (The fixed footer that the server appends after your response is exempt — do not worry about it.)');
     }
     const emojiRulesBlock = emojiRules.length > 0
       ? `\n\nEMOJI OVERRIDES FOR THIS REQUEST (these REPLACE the corresponding rules in the system prompt):\n${emojiRules.map((r) => '- ' + r).join('\n')}`
@@ -481,13 +534,13 @@ app.post('/generate', upload.array('images', 20), async (req, res) => {
 
     content.push({
       type: 'text',
-      text: `I attached ${files.length} OSRS account screenshot${files.length === 1 ? '' : 's'}, each potentially followed by up to 4 zoomed quadrant crops of that same screenshot. Quadrant crops are NOT separate screenshots — they show the same data at higher effective resolution to help you read small numbers. When filling extractedData.perScreenshot, produce ONE entry per original screenshot (imageIndex 1..${files.length}), not per quadrant. Use the quadrants to verify / correct what you read on the full view.${hiscoresBlock}${confirmedItemsBlock}${titleItemsBlock}${emojiRulesBlock}
+      text: `I attached ${files.length} OSRS account screenshot${files.length === 1 ? '' : 's'}, each potentially followed by up to 4 zoomed quadrant crops of that same screenshot. Quadrant crops are NOT separate screenshots — they show the same data at higher effective resolution to help you read small numbers. When filling extractedData.perScreenshot, produce ONE entry per original screenshot (imageIndex 1..${files.length}), not per quadrant. Use the quadrants to verify / correct what you read on the full view.${accountTypeBlock}${hiddenSkillsBlock}${hiscoresBlock}${confirmedItemsBlock}${titleItemsBlock}${emojiRulesBlock}
 
 Follow this process STRICTLY:
 
 STEP 1 — Extract. For each original screenshot, fill out one entry in extractedData.perScreenshot with ONLY what you can clearly read across the full view and its quadrants. Cross-check: if the full view and a quadrant disagree on a number, trust the quadrant (higher resolution) OR, if still unclear, omit and list it under extractedData.unreadableOrUnclear. Do NOT guess. Do NOT use knowledge of typical OSRS accounts to fill gaps.
 
-STEP 2 — Write. Generate ONE hype / salesy listing with a title and a description. Every specific fact must come from extractedData or hiscoresData. Apply the NUMBER RULES strictly: REPORT EXACT OR OMIT. HARD CEILING. No "+" suffixes. No "all"/"most"/"plenty of"/"deep"/"extensive" for progress metrics. No "maxed" unless explicitly confirmed. If a metric is unflattering, OMIT it. Bullets are bare facts with at most ONE relevant emoji — no descriptive text after the fact.
+STEP 2 — Write. Generate ONE hype / salesy listing with a title and a description. Every specific fact must come from extractedData or hiscoresData. Apply the NUMBER RULES strictly: REPORT EXACT OR OMIT. HARD CEILING. No "+" suffixes. No "all"/"most"/"plenty of"/"deep"/"extensive" for progress metrics. No "maxed" unless explicitly confirmed. If a metric is unflattering, OMIT it. The description is exactly one general sentence with no numbers, no bullets, and no emojis.
 
 STEP 3 — Self-check. Before returning, verify every numeric claim in the title and every bullet against extractedData and hiscoresData. If any number in the listing is higher than the source, DELETE that bullet. If any banned vague phrase appears, REWRITE to exact or DELETE.
 
@@ -499,9 +552,8 @@ Return ONLY the JSON object, no markdown fences, no preamble.`
     });
 
     const anthropicBody = {
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 4000,
-      temperature: 0.2,
+      model: 'claude-sonnet-5',
+      max_tokens: 16000,
       system: SYSTEM_PROMPT,
       messages: [
         { role: 'user', content }
@@ -600,11 +652,14 @@ Return ONLY the JSON object, no markdown fences, no preamble.`
 
     const appendFooter = (obj) => {
       if (obj && typeof obj.description === 'string') {
-        obj.description = obj.description.replace(/\s+$/, '') + LISTING_FOOTER;
+        obj.description = obj.description.replace(/\s+$/, '') + LISTING_FOOTERS[loginMethod];
       }
     };
     appendFooter(parsed.listing);
     if (parsed.versions) Object.values(parsed.versions).forEach(appendFooter);
+
+    if (accountType) parsed.accountType = ACCOUNT_TYPES[accountType].label;
+    if (hiddenSkills.length > 0) parsed.hiddenSkills = hiddenSkills;
 
     res.json(parsed);
   } catch (err) {

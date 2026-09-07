@@ -209,6 +209,52 @@ descEmojiToggle.addEventListener('click', () => {
 
 let selectedFiles = [];
 
+// Per-file redaction info: File -> { original: File, state: {grid, skills, boxes} }
+// Only files that have been redacted have an entry. selectedFiles holds the
+// redacted File (what gets uploaded); `original` is kept so the tool can be reopened.
+const redactions = new Map();
+
+let accountType = 'auto';
+let loginMethod = 'legacy';
+
+function wirePillGroup(groupEl, onChange) {
+  groupEl.querySelectorAll('.pill').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      groupEl.querySelectorAll('.pill').forEach((b) => {
+        const on = b === btn;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      onChange(btn.dataset.value);
+    });
+  });
+}
+wirePillGroup(document.getElementById('accountTypeGroup'), (v) => { accountType = v; });
+wirePillGroup(document.getElementById('loginMethodGroup'), (v) => { loginMethod = v; });
+
+function getHiddenSkills() {
+  const set = new Set();
+  redactions.forEach((r) => r.state.skills.forEach((s) => set.add(s)));
+  return Array.from(set);
+}
+
+function openRedactFor(idx) {
+  const current = selectedFiles[idx];
+  const existing = redactions.get(current);
+  const original = existing ? existing.original : current;
+  window.openRedactTool(original, existing ? existing.state : null, (newFile, newState) => {
+    const isEmpty = newState.skills.length === 0 && newState.boxes.length === 0;
+    redactions.delete(current);
+    if (isEmpty) {
+      selectedFiles[idx] = original;
+    } else {
+      selectedFiles[idx] = newFile;
+      redactions.set(newFile, { original, state: newState });
+    }
+    refreshPreviews();
+  });
+}
+
 function refreshPreviews() {
   previewGrid.innerHTML = '';
   if (selectedFiles.length === 0) {
@@ -232,11 +278,28 @@ function refreshPreviews() {
     removeBtn.title = 'Remove';
     removeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      redactions.delete(selectedFiles[idx]);
       selectedFiles.splice(idx, 1);
       refreshPreviews();
     });
+    const redactBtn = document.createElement('button');
+    redactBtn.className = 'preview-redact';
+    redactBtn.type = 'button';
+    redactBtn.textContent = redactions.has(file) ? 'Edit redaction' : 'Redact skills';
+    redactBtn.title = 'Black out skills or areas on this screenshot';
+    redactBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openRedactFor(idx);
+    });
     wrap.appendChild(img);
+    if (redactions.has(file)) {
+      const badge = document.createElement('span');
+      badge.className = 'preview-badge';
+      badge.textContent = 'Redacted';
+      wrap.appendChild(badge);
+    }
     wrap.appendChild(removeBtn);
+    wrap.appendChild(redactBtn);
     previewGrid.appendChild(wrap);
   });
 }
@@ -279,6 +342,7 @@ dropzone.addEventListener('drop', (e) => {
 
 clearBtn.addEventListener('click', () => {
   selectedFiles = [];
+  redactions.clear();
   refreshPreviews();
   resultsSection.classList.add('hidden');
   statusBox.classList.add('hidden');
@@ -523,8 +587,53 @@ function renderResults(data) {
   }
 
   renderAudit(data.extractedData, data.hiscoresUsed);
+  renderResultImages();
 
   resultsSection.classList.remove('hidden');
+}
+
+function renderResultImages() {
+  const section = document.getElementById('resultImages');
+  const grid = document.getElementById('resultImageGrid');
+  grid.innerHTML = '';
+  if (selectedFiles.length === 0) {
+    section.classList.add('hidden');
+    return;
+  }
+  selectedFiles.forEach((file, idx) => {
+    const card = document.createElement('div');
+    card.className = 'result-image';
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(file);
+    img.onload = () => URL.revokeObjectURL(img.src);
+    img.alt = 'Screenshot ' + (idx + 1);
+    const row = document.createElement('div');
+    row.className = 'result-image-row';
+    const label = document.createElement('span');
+    const red = redactions.get(file);
+    label.textContent = red
+      ? 'Redacted' + (red.state.skills.length ? ': ' + red.state.skills.map((s) => (s === 'Overall' ? 'Total' : s)).join(', ') : '')
+      : 'Original';
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'copy-btn';
+    save.textContent = 'Save image';
+    save.addEventListener('click', () => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(file);
+      a.download = file.name || ('screenshot-' + (idx + 1) + '.png');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    });
+    row.appendChild(label);
+    row.appendChild(save);
+    card.appendChild(img);
+    card.appendChild(row);
+    grid.appendChild(card);
+  });
+  section.classList.remove('hidden');
 }
 
 function makeBadge(text) {
@@ -554,6 +663,10 @@ generateBtn.addEventListener('click', async () => {
   if (titleItems.length > 0) formData.append('titleItems', JSON.stringify(titleItems));
   formData.append('titleEmojis', titleEmojis ? 'true' : 'false');
   formData.append('descEmojis', descEmojis ? 'true' : 'false');
+  formData.append('accountType', accountType);
+  formData.append('loginMethod', loginMethod);
+  const hiddenSkills = getHiddenSkills();
+  if (hiddenSkills.length > 0) formData.append('hiddenSkills', JSON.stringify(hiddenSkills));
 
   try {
     const res = await fetch('/generate', { method: 'POST', body: formData });

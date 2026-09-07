@@ -48,6 +48,26 @@
       </button>
     </section>
 
+    <section class="option-rows">
+      <div class="option-row">
+        <span class="option-label">Account type</span>
+        <div class="pill-group" id="accountTypeGroup" role="radiogroup" aria-label="Account type">
+          <button type="button" class="pill active" data-value="auto" aria-pressed="true" title="Let the model decide from the screenshots">Auto</button>
+          <button type="button" class="pill" data-value="main" aria-pressed="false">Main</button>
+          <button type="button" class="pill" data-value="ironman" aria-pressed="false">Ironman</button>
+          <button type="button" class="pill" data-value="hcim" aria-pressed="false" title="Hardcore Ironman">HCIM</button>
+          <button type="button" class="pill" data-value="uim" aria-pressed="false" title="Ultimate Ironman">UIM</button>
+        </div>
+      </div>
+      <div class="option-row">
+        <span class="option-label">Login method</span>
+        <div class="pill-group" id="loginMethodGroup" role="radiogroup" aria-label="Login method">
+          <button type="button" class="pill active" data-value="legacy" aria-pressed="true" title="Footer says: login email + legacy password">Legacy email</button>
+          <button type="button" class="pill" data-value="jagex" aria-pressed="false" title="Footer says: email + password + authenticator key">Jagex Launcher</button>
+        </div>
+      </div>
+    </section>
+
     <section id="statusBox" class="status-box hidden"></section>
 
     <section id="resultsSection" class="results hidden">
@@ -68,6 +88,12 @@
           <button class="copy-btn" data-copy="desc">Copy Description</button>
         </article>
       </div>
+
+      <section id="resultImages" class="result-images hidden">
+        <h3>Images to upload with the listing</h3>
+        <p class="hint">Redacted images are what the model saw. Save the ones you want to attach to the listing.</p>
+        <div id="resultImageGrid" class="result-image-grid"></div>
+      </section>
 
       <details id="auditPanel" class="audit-panel hidden">
         <summary>
@@ -101,6 +127,40 @@
 
   <div id="gearBackdrop" class="gear-backdrop"></div>
 
+  <div id="redactModal" class="redact-modal hidden" role="dialog" aria-modal="true" aria-label="Redact skills">
+    <div class="redact-dialog">
+      <header class="redact-header">
+        <h2>Black out skills</h2>
+        <button id="redactClose" class="gear-close" type="button" aria-label="Close">×</button>
+      </header>
+      <p id="redactHelp" class="redact-help"></p>
+      <div class="redact-body">
+        <div class="redact-canvas-wrap">
+          <canvas id="redactCanvas"></canvas>
+        </div>
+        <div class="redact-side">
+          <div class="redact-mode">
+            <button type="button" class="pill active" id="modeBoxes" data-mode="boxes" title="Drag on the image to draw a black box anywhere">Draw boxes</button>
+            <button type="button" class="pill" id="modeCalibrate" data-mode="calibrate" title="Drag a box from the top-left of Attack to the bottom-right of Total level">Set skill grid</button>
+          </div>
+          <div id="skillToggleGrid" class="skill-toggle-grid"></div>
+          <div class="redact-side-actions">
+            <button type="button" id="redactUndo" class="secondary-btn">Undo last box</button>
+            <button type="button" id="redactReset" class="secondary-btn">Clear all</button>
+          </div>
+        </div>
+      </div>
+      <footer class="redact-footer">
+        <span id="redactSummary" class="gear-selected-text">Nothing hidden</span>
+        <div class="redact-footer-actions">
+          <button type="button" id="redactSave" class="secondary-btn">Save image</button>
+          <button type="button" id="redactApply" class="primary-btn">Apply to upload</button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <script src="redact.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
