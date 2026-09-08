@@ -61,7 +61,7 @@ Browser  →  Local Express server  →  Cloudflare Worker proxy  →  Anthropic
    - **Title / Description emojis** — toggle emojis on or off for each.
    - **Gear** (side tab) — tick items the account actually has. These override anything the model might misread. The ★ Title pill forces an item into the title.
 4. Optionally black out skills. Click **Redact skills** on a stats-tab preview:
-   - The first time, drag one box from the top-left corner of the Attack cell to the bottom-right corner of the Total level cell. The grid is remembered in your browser for later screenshots.
+   - The first time, drag one box from the top-left corner of the Attack cell to the bottom-right corner of the Sailing cell (bottom-right of the grid). The grid is remembered in your browser for later screenshots.
    - Click skill names to black out their cells, or drag anywhere on the image to draw a box. Undo and Clear all are available.
    - **Save image** downloads the redacted PNG. **Apply to upload** swaps the redacted image in for the original, so the model never sees the hidden skills. They are also removed from any hiscores data and the model is told not to mention them.
 5. Click **Generate Listings**.

@@ -78,10 +78,10 @@ HISCORES LOOKUP (may or may not be provided by the user):
 
 CONFIRMED ITEMS (user-verified checklist, may or may not be provided):
 - The user has a side panel of common OSRS items they can check off to assert the account owns them. If any are checked, the user message will include a CONFIRMED ITEMS list.
-- When CONFIRMED ITEMS are provided, those items are AUTHORITATIVE. The account has them. You do NOT need to verify them in the screenshots. You MUST include each confirmed item as its own bullet in the description (using the bare bullet + emoji format).
+- When CONFIRMED ITEMS are provided, those items are AUTHORITATIVE. The account has them. You do NOT need to verify them in the screenshots. Feature the most prestigious confirmed items in the TITLE (the description is a single general sentence with no bullets, so items belong in the title).
 - Prioritize the most prestigious confirmed items in the title too (e.g. Twisted Bow, Scythe of Vitur, Infernal Cape, Quiver, Torva set, Ancestral set). Use matching emojis: Twisted Bow 🏹, Scythe 🔪, Shadow 🌑, Fire Cape 🔥, Infernal Cape 🌋, Max Cape ⭐, Completionist Cape 🏆, Quiver 🎯, Ava's Assembler 🪶, Graceful 🕊️, Barrows Gloves 🧤, Slayer Helm 💀, Torva 🛡️, Ancestral 🧙, Masori 🏹, Virtus 🌀, Bandos 🐗, Armadyl 🦅, generic item 💎.
 - You may ALSO include items clearly visible in screenshots that are not on the confirmed list. But never invent items that are neither confirmed nor visible.
-- Do not describe or qualify confirmed items. A confirmed item becomes a bullet exactly like: "✓ Infernal Cape 🌋". No "(best in slot)", no "(great for bossing)", no adjectives.
+- Do not describe or qualify confirmed items. In the title an item appears bare, like "Infernal Cape 🌋". No "(best in slot)", no "(great for bossing)", no adjectives.
 - Items in CONFIRMED ITEMS should generally each get their own bullet. Do not collapse multiple confirmed items into one bullet like "✓ Full endgame gear".
 
 FRACTION PARSING ON THE ACCOUNT OVERVIEW PAGE — READ THIS FIRST:
@@ -269,6 +269,9 @@ const HISCORE_SKILLS = [
   'Farming', 'Runecraft', 'Hunter', 'Construction'
 ];
 
+// Skills the redaction tool can name. Sailing is on the skills tab but not (yet) in the hiscore CSV.
+const REDACTABLE_SKILLS = [...HISCORE_SKILLS.filter((s) => s !== 'Overall'), 'Sailing'];
+
 const HISCORE_ENDPOINTS = [
   { type: 'main', url: 'https://secure.runescape.com/m=hiscore_oldschool/index_lite.ws' },
   { type: 'ironman', url: 'https://secure.runescape.com/m=hiscore_oldschool_ironman/index_lite.ws' },
@@ -402,8 +405,8 @@ app.post('/generate', upload.array('images', 20), async (req, res) => {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
           hiddenSkills = parsed
-            .filter((s) => typeof s === 'string' && HISCORE_SKILLS.includes(s))
-            .slice(0, HISCORE_SKILLS.length);
+            .filter((s) => typeof s === 'string' && REDACTABLE_SKILLS.includes(s))
+            .slice(0, REDACTABLE_SKILLS.length);
         }
       }
     } catch (e) {

@@ -12,11 +12,38 @@ const SKILL_GRID = [
   ['Prayer', 'Crafting', 'Firemaking'],
   ['Magic', 'Fletching', 'Woodcutting'],
   ['Runecraft', 'Slayer', 'Farming'],
-  ['Construction', 'Hunter', 'Overall']
+  ['Construction', 'Hunter', 'Sailing']
 ];
 const GRID_COLS = 3;
 const GRID_ROWS = SKILL_GRID.length;
 const GRID_STORAGE_KEY = 'osrs-redact-grid-v1';
+
+// Save a blob as a file. Uses the browser's save dialog (Chrome / Edge) so the
+// user can pick a folder; falls back to a plain download elsewhere.
+window.saveImageFile = async function (blob, suggestedName) {
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName,
+        types: [{ description: 'PNG image', accept: { 'image/png': ['.png'] } }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return; // user cancelled
+      // fall through to plain download on any other failure
+    }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = suggestedName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};
 
 (function () {
   const modal = document.getElementById('redactModal');
@@ -168,7 +195,7 @@ const GRID_STORAGE_KEY = 'osrs-redact-grid-v1';
       btn.type = 'button';
       btn.className = 'skill-toggle';
       btn.dataset.skill = skill;
-      btn.textContent = skill === 'Overall' ? 'Total' : skill;
+      btn.textContent = skill;
       btn.addEventListener('click', () => {
         if (!state.grid) return;
         const i = state.skills.indexOf(skill);
@@ -190,7 +217,7 @@ const GRID_STORAGE_KEY = 'osrs-redact-grid-v1';
     undoBtn.disabled = state.boxes.length === 0;
 
     if (mode === 'calibrate') {
-      help.textContent = 'Drag one box from the top-left corner of the Attack cell to the bottom-right corner of the Total level cell. The grid is remembered for your next screenshot.';
+      help.textContent = 'Drag one box from the top-left corner of the Attack cell to the bottom-right corner of the Sailing cell (bottom-right of the grid). The grid is remembered for your next screenshot.';
     } else if (!hasGrid) {
       help.textContent = 'Drag anywhere on the image to draw a black box. To black out skills by name, click "Set skill grid" first.';
     } else {
@@ -260,13 +287,8 @@ const GRID_STORAGE_KEY = 'osrs-redact-grid-v1';
 
   saveBtn.addEventListener('click', () => {
     const out = exportCanvas();
-    const a = document.createElement('a');
     const base = (sourceFile && sourceFile.name ? sourceFile.name : 'screenshot').replace(/\.[^.]+$/, '');
-    a.download = base + '-redacted.png';
-    a.href = out.toDataURL('image/png');
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    out.toBlob((blob) => { window.saveImageFile(blob, base + '-redacted.png'); }, 'image/png');
   });
 
   applyBtn.addEventListener('click', () => {

@@ -612,20 +612,14 @@ function renderResultImages() {
     const label = document.createElement('span');
     const red = redactions.get(file);
     label.textContent = red
-      ? 'Redacted' + (red.state.skills.length ? ': ' + red.state.skills.map((s) => (s === 'Overall' ? 'Total' : s)).join(', ') : '')
+      ? 'Redacted' + (red.state.skills.length ? ': ' + red.state.skills.join(', ') : '')
       : 'Original';
     const save = document.createElement('button');
     save.type = 'button';
     save.className = 'copy-btn';
     save.textContent = 'Save image';
     save.addEventListener('click', () => {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(file);
-      a.download = file.name || ('screenshot-' + (idx + 1) + '.png');
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      window.saveImageFile(file, file.name || ('screenshot-' + (idx + 1) + '.png'));
     });
     row.appendChild(label);
     row.appendChild(save);
