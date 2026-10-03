@@ -71,6 +71,18 @@
       </div>
     </section>
 
+    <details class="handover-panel">
+      <summary>
+        <strong>Buyer handover message</strong>
+        <span class="audit-hint">Copy and send after the sale. RSN fills in from the account name above; paste the 2FA key yourself.</span>
+      </summary>
+      <textarea id="handoverText" spellcheck="false" rows="11"></textarea>
+      <div class="handover-actions">
+        <button type="button" id="handoverCopy" class="copy-btn">Copy message</button>
+        <button type="button" id="handoverReset" class="secondary-btn">Reset template</button>
+      </div>
+    </details>
+
     <section id="statusBox" class="status-box hidden"></section>
 
     <section id="resultsSection" class="results hidden">

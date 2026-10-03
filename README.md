@@ -65,10 +65,11 @@ Browser  →  Local Express server  →  Cloudflare Worker proxy  →  Anthropic
    - Click skill names to black out their cells, or drag anywhere on the image to draw a box. Undo and Clear all are available.
    - **Save image** downloads the redacted PNG. **Apply to upload** swaps the redacted image in for the original, so the model never sees the hidden skills. They are also removed from any hiscores data and the model is told not to mention them.
 5. Click **Generate Listings**.
-6. Copy the **Title** and the **Description** (editable before copying). The description is one general sentence followed by the fixed footer: clean-account line, handover details, and terms and conditions.
+6. Copy the **Title** and the **Description** (editable before copying). The description is one general sentence followed by the fixed footer: handover details (per login method) and terms and conditions. The same footer is used for every account type.
 7. Under the description, **Images to upload with the listing** shows each screenshot as the model saw it, with a **Save image** button.
 8. Optionally click **Build listing card** (next to Generate; works as soon as screenshots are uploaded) to combine them into one OSRS-style framed image: stone border, afkVault logo next to the title, yellow tags, optional "Member till" date and price, your chosen screenshots side by side (up to 3, redacted ones pre-selected and used as redacted), and a faded afkVault watermark over the panel. Opacity slider and tags are remembered in your browser. **Save image** downloads the PNG.
-9. Hit **Clear** to reset and run another account.
+9. After the sale, open **Buyer handover message** (under the option pills), paste the 2FA secret key, and hit **Copy message**. The RSN fills in from the account name box.
+10. Hit **Clear** to reset and run another account.
 
 The app only uses information visible in your screenshots or returned by the hiscores. Numbers are reported exactly or omitted; nothing is rounded up or invented. If a number looks off, open the **Debug** panel under the listing to see what the model claims to have read.
 

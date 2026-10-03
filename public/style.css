@@ -335,7 +335,7 @@ html, body {
   font-size: 0.9rem;
 }
 
-.audit-panel {
+.audit-panel, .handover-panel {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -343,11 +343,11 @@ html, body {
   padding: 0;
 }
 
-.audit-panel[open] {
+.audit-panel[open], .handover-panel[open] {
   border-color: var(--gold-dim);
 }
 
-.audit-panel summary {
+.audit-panel summary, .handover-panel summary {
   cursor: pointer;
   padding: 12px 16px;
   color: var(--gold);
@@ -359,16 +359,16 @@ html, body {
   user-select: none;
 }
 
-.audit-panel summary::-webkit-details-marker { display: none; }
+.audit-panel summary::-webkit-details-marker, .handover-panel summary::-webkit-details-marker { display: none; }
 
-.audit-panel summary::before {
+.audit-panel summary::before, .handover-panel summary::before {
   content: '▸';
   margin-right: 6px;
   transition: transform 0.15s;
   display: inline-block;
 }
 
-.audit-panel[open] summary::before {
+.audit-panel[open] summary::before, .handover-panel[open] summary::before {
   transform: rotate(90deg);
 }
 
@@ -1196,4 +1196,26 @@ html, body {
   font-size: 0.85rem;
   color: var(--text-dim);
   cursor: pointer;
+}
+
+/* ---------- Buyer handover message ---------- */
+#handoverText {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 0 16px 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  font: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+}
+
+.handover-actions {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 14px;
+  flex-wrap: wrap;
 }

@@ -717,3 +717,42 @@ document.querySelectorAll('.copy-btn').forEach((btn) => {
     }
   });
 });
+
+
+// ---------- Buyer handover message ----------
+// Sent to the buyer after the sale. RSN follows the account name box until the
+// user edits the message by hand; Reset template restores it.
+const HANDOVER_TEMPLATE = `RSN: {rsn}
+2FA Secret Key: 
+
+
+2FA Secret Key Generator:
+https://totp.danhersam.com/
+
+Please send a message confirming you have logged into the account so I can remove the account details from my panel. If you have any other questions or concerns feel free to reach out. Thank you!`;
+
+const handoverText = document.getElementById('handoverText');
+const handoverCopy = document.getElementById('handoverCopy');
+const handoverReset = document.getElementById('handoverReset');
+let handoverEdited = false;
+
+function fillHandover() {
+  handoverText.value = HANDOVER_TEMPLATE.replace('{rsn}', usernameInput.value.trim());
+}
+fillHandover();
+usernameInput.addEventListener('input', () => { if (!handoverEdited) fillHandover(); });
+handoverText.addEventListener('input', () => { handoverEdited = true; });
+handoverReset.addEventListener('click', () => { handoverEdited = false; fillHandover(); });
+handoverCopy.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(handoverText.value);
+    handoverCopy.textContent = 'Copied!';
+    handoverCopy.classList.add('copied');
+    setTimeout(() => {
+      handoverCopy.textContent = 'Copy message';
+      handoverCopy.classList.remove('copied');
+    }, 1200);
+  } catch (e) {
+    alert('Copy failed: ' + e.message);
+  }
+});
