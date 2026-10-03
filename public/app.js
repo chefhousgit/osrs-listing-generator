@@ -216,7 +216,7 @@ let selectedFiles = [];
 const redactions = new Map();
 
 let accountType = 'auto';
-let loginMethod = 'legacy';
+let loginMethod = 'jagex';
 let banHistory = 'clean';
 
 function wirePillGroup(groupEl, onChange) {
