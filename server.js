@@ -228,6 +228,11 @@ const LISTING_TERMS = `🧾 Terms and Conditions:
 
 It is your responsibility to secure the account including changing account details such as the email and password. I am not responsible for bans or account locks that happen after the account is in your possession (once you have logged into the account). This includes macro bans, RWT bans, or any rule breaking bans. No refunds or replacements will be provided for bans where the ban date is on or after the sale date, all accounts are well rested.`;
 
+// Ironman-family listings use slightly different wording (no "well rested" claim).
+const IRONMAN_TERMS = `🧾 Terms and Conditions:
+
+It is your responsibility to secure the account including changing account details such as the email and password. I am not responsible for bans or account locks that happen after the account is in your possession (once login details are delivered). This includes macro bans, RWT bans, or any rule breaking bans. No refunds or replacements will be provided for bans where the ban date is on or after the sale date.`;
+
 const LISTING_FOOTERS = {
   legacy: `
 
@@ -250,6 +255,27 @@ Upon purchase you will receive:
 🔐 A secret key (used to generate Authenticator codes)
 
 ${LISTING_TERMS}`
+};
+
+// Footers for ironman / HCIM / UIM accounts: no clean-account line, Jagex wording, ironman terms.
+const IRONMAN_FOOTERS = {
+  legacy: `
+
+Upon purchase you will receive:
+
+📧 The login email (creatable, outlook)
+🔑 The legacy login password
+
+${IRONMAN_TERMS}`,
+  jagex: `
+
+Upon purchase you will receive:
+
+📧 The email (for the Jagex account)
+🔑 The password (for the Jagex account and email)
+🔐 A secret key (used to generate Authenticator codes, for Jagex)
+
+${IRONMAN_TERMS}`
 };
 
 const ACCOUNT_TYPES = {
@@ -653,9 +679,14 @@ Return ONLY the JSON object, no markdown fences, no preamble.`
     applyEmojiStripping(parsed.listing);
     if (parsed.versions) Object.values(parsed.versions).forEach(applyEmojiStripping);
 
+    // Ironman-family footer when the user forced an ironman type, or Auto and the model detected one.
+    const isIronman = accountType
+      ? accountType !== 'main'
+      : /iron/i.test(String(parsed.accountType || ''));
+    const footers = isIronman ? IRONMAN_FOOTERS : LISTING_FOOTERS;
     const appendFooter = (obj) => {
       if (obj && typeof obj.description === 'string') {
-        obj.description = obj.description.replace(/\s+$/, '') + LISTING_FOOTERS[loginMethod];
+        obj.description = obj.description.replace(/\s+$/, '') + footers[loginMethod];
       }
     };
     appendFooter(parsed.listing);
