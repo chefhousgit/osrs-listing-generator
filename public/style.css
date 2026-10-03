@@ -1076,3 +1076,124 @@ html, body {
   font-size: 0.8rem;
   color: var(--text-dim);
 }
+
+/* ---------- Listing card modal ---------- */
+.card-dialog {
+  width: min(1250px, 100%);
+}
+
+.card-body {
+  grid-template-columns: 1fr 300px;
+}
+
+@media (max-width: 760px) {
+  .card-body { grid-template-columns: 1fr; }
+}
+
+.card-canvas-wrap {
+  align-items: flex-start;
+  min-width: 0;
+  overflow: hidden;
+}
+
+#cardCanvas {
+  max-width: 100%;
+  max-height: calc(95vh - 230px);
+  width: auto;
+  height: auto;
+  display: block;
+}
+
+.card-side {
+  gap: 12px;
+}
+
+.card-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.card-field small {
+  font-weight: normal;
+  opacity: 0.8;
+}
+
+.card-field input[type="text"],
+.card-field input[type="date"],
+.card-field textarea {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.card-field textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.card-field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.card-field-row input {
+  min-width: 0;
+  width: 100%;
+}
+
+.card-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.card-pick {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+.card-pick.on {
+  border-color: var(--gold-dim);
+  color: var(--text);
+}
+
+.card-pick input {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  margin: 0;
+}
+
+.card-pick img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 4px;
+  background: #000;
+}
+
+.card-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  cursor: pointer;
+}

@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>OSRS Listing Generator</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" />
 </head>
 <body>
   <header class="topbar">
@@ -38,6 +40,7 @@
     <section class="actions">
       <button id="generateBtn" class="primary-btn" disabled>Generate Listings</button>
       <button id="clearBtn" class="secondary-btn">Clear</button>
+      <button id="cardBtn" class="secondary-btn" type="button" disabled title="Combine the uploaded screenshots into one framed listing image with the afkVault logo">Build listing card</button>
       <button id="titleEmojiToggle" class="toggle-btn active" type="button" aria-pressed="true" title="Include emojis in the generated title">
         <span class="toggle-dot"></span>
         <span class="toggle-label">Title emojis: <strong id="titleEmojiState">On</strong></span>
@@ -91,7 +94,7 @@
 
       <section id="resultImages" class="result-images hidden">
         <h3>Images to upload with the listing</h3>
-        <p class="hint">Redacted images are what the model saw. Save the ones you want to attach to the listing.</p>
+        <p class="hint">Redacted images are what the model saw. Save the ones you want to attach to the listing, or use <strong>Build listing card</strong> above to combine them into one framed image.</p>
         <div id="resultImageGrid" class="result-image-grid"></div>
       </section>
 
@@ -160,7 +163,61 @@
     </div>
   </div>
 
+  <div id="cardModal" class="redact-modal hidden" role="dialog" aria-modal="true" aria-label="Build listing card">
+    <div class="redact-dialog card-dialog">
+      <header class="redact-header">
+        <h2>Build listing card</h2>
+        <button id="cardClose" class="gear-close" type="button" aria-label="Close">×</button>
+      </header>
+      <p class="redact-help">One framed image for the listing: your screenshots side by side with the afkVault logo in the header and as a faded watermark. Redacted screenshots are used as redacted, so hidden skills stay hidden.</p>
+      <div class="redact-body card-body">
+        <div class="redact-canvas-wrap card-canvas-wrap">
+          <canvas id="cardCanvas"></canvas>
+        </div>
+        <div class="redact-side card-side">
+          <label class="card-field">
+            <span>Title</span>
+            <input type="text" id="cardTitle" maxlength="40" autocomplete="off" placeholder="e.g. 988 Total Level HCIM" />
+          </label>
+          <label class="card-field">
+            <span>Tags <small>(one per line)</small></span>
+            <textarea id="cardTags" rows="3" spellcheck="false"></textarea>
+          </label>
+          <div class="card-field-row">
+            <label class="card-field">
+              <span>Member till <small>(optional)</small></span>
+              <input type="date" id="cardMemberTill" />
+            </label>
+            <label class="card-field">
+              <span>Price <small>(optional)</small></span>
+              <input type="text" id="cardPrice" inputmode="decimal" placeholder="e.g. 50" />
+            </label>
+          </div>
+          <div class="card-field">
+            <span>Screenshots on the card <small>(up to 3)</small></span>
+            <div id="cardImagePicker" class="card-picker"></div>
+          </div>
+          <label class="card-field">
+            <span>Watermark opacity <strong id="cardWatermarkValue">10%</strong></span>
+            <input type="range" id="cardWatermarkAlpha" min="0" max="40" step="1" value="10" />
+          </label>
+          <label class="card-check">
+            <input type="checkbox" id="cardHeaderLogo" checked />
+            <span>Logo next to the title</span>
+          </label>
+        </div>
+      </div>
+      <footer class="redact-footer">
+        <span id="cardNote" class="gear-selected-text"></span>
+        <div class="redact-footer-actions">
+          <button type="button" id="cardSave" class="primary-btn">Save image</button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
   <script src="redact.js"></script>
+  <script src="card.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

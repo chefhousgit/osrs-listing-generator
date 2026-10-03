@@ -67,7 +67,8 @@ Browser  →  Local Express server  →  Cloudflare Worker proxy  →  Anthropic
 5. Click **Generate Listings**.
 6. Copy the **Title** and the **Description** (editable before copying). The description is one general sentence followed by the fixed footer: clean-account line, handover details, and terms and conditions.
 7. Under the description, **Images to upload with the listing** shows each screenshot as the model saw it, with a **Save image** button.
-8. Hit **Clear** to reset and run another account.
+8. Optionally click **Build listing card** (next to Generate; works as soon as screenshots are uploaded) to combine them into one OSRS-style framed image: stone border, afkVault logo next to the title, yellow tags, optional "Member till" date and price, your chosen screenshots side by side (up to 3, redacted ones pre-selected and used as redacted), and a faded afkVault watermark over the panel. Opacity slider and tags are remembered in your browser. **Save image** downloads the PNG.
+9. Hit **Clear** to reset and run another account.
 
 The app only uses information visible in your screenshots or returned by the hiscores. Numbers are reported exactly or omitted; nothing is rounded up or invented. If a number looks off, open the **Debug** panel under the listing to see what the model claims to have read.
 

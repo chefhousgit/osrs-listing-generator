@@ -181,6 +181,7 @@ const previewGrid = document.getElementById('previewGrid');
 const imageCount = document.getElementById('imageCount');
 const generateBtn = document.getElementById('generateBtn');
 const clearBtn = document.getElementById('clearBtn');
+const cardBtn = document.getElementById('cardBtn');
 const statusBox = document.getElementById('statusBox');
 const resultsSection = document.getElementById('resultsSection');
 const metaRow = document.getElementById('metaRow');
@@ -260,10 +261,12 @@ function refreshPreviews() {
   if (selectedFiles.length === 0) {
     previewSection.classList.add('hidden');
     generateBtn.disabled = true;
+    cardBtn.disabled = true;
     return;
   }
   previewSection.classList.remove('hidden');
   generateBtn.disabled = false;
+  cardBtn.disabled = false;
   imageCount.textContent = selectedFiles.length;
 
   selectedFiles.forEach((file, idx) => {
@@ -338,6 +341,17 @@ fileInput.addEventListener('change', (e) => {
 });
 dropzone.addEventListener('drop', (e) => {
   addFiles(Array.from(e.dataTransfer.files));
+});
+
+cardBtn.addEventListener('click', () => {
+  if (selectedFiles.length === 0) return;
+  const titleEl = document.querySelector('.version-card .output-title');
+  window.openCardTool({
+    files: selectedFiles.slice(),
+    isRedacted: (file) => redactions.has(file),
+    title: resultsSection.classList.contains('hidden') ? '' : (titleEl && titleEl.textContent) || '',
+    loginMethod
+  });
 });
 
 clearBtn.addEventListener('click', () => {
