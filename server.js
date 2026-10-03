@@ -255,11 +255,26 @@ ${LISTING_TERMS}`
 };
 
 const ACCOUNT_TYPES = {
-  main: { label: 'Main', titleLead: 'Main', noun: 'main account' },
-  ironman: { label: 'Ironman', titleLead: 'Ironman', noun: 'ironman account' },
-  hcim: { label: 'Hardcore Ironman', titleLead: 'Hardcore Ironman | HCIM', noun: 'hardcore ironman account' },
-  uim: { label: 'Ultimate Ironman', titleLead: 'Ultimate Ironman | UIM', noun: 'ultimate ironman account' }
+  main: { label: 'Main', titleLead: 'Main', noun: 'main account', article: 'a' },
+  ironman: { label: 'Ironman', titleLead: 'Ironman', noun: 'ironman account', article: 'an' },
+  hcim: { label: 'Hardcore Ironman', titleLead: 'Hardcore Ironman | HCIM', noun: 'hardcore ironman account', article: 'a' },
+  uim: { label: 'Ultimate Ironman', titleLead: 'Ultimate Ironman | UIM', noun: 'ultimate ironman account', article: 'an' }
 };
+
+// The description sentence is fixed text, not model output. Only the account noun changes.
+function fixedDescription(typeKey) {
+  const t = ACCOUNT_TYPES[typeKey] || ACCOUNT_TYPES.main;
+  return `Great foundation for ${t.article} ${t.noun} with many skills trained and resources banked.`;
+}
+
+// Map the model's free-text accountType ("Hardcore Ironman", "Main", ...) back to a key.
+function accountTypeKeyFromLabel(label) {
+  const s = String(label || '').toLowerCase();
+  if (/ultimate|uim/.test(s)) return 'uim';
+  if (/hardcore|hcim/.test(s)) return 'hcim';
+  if (/iron/.test(s)) return 'ironman';
+  return 'main';
+}
 
 // Which hiscore board to try first for each user-selected account type.
 const ACCOUNT_TYPE_BOARD = { main: 'main', ironman: 'ironman', hcim: 'hardcore', uim: 'ultimate' };
@@ -656,9 +671,11 @@ Return ONLY the JSON object, no markdown fences, no preamble.`
     applyEmojiStripping(parsed.listing);
     if (parsed.versions) Object.values(parsed.versions).forEach(applyEmojiStripping);
 
+    // Replace the model's sentence with the fixed one (forced type wins; otherwise the detected type).
+    const descriptionTypeKey = accountType || accountTypeKeyFromLabel(parsed.accountType);
     const appendFooter = (obj) => {
       if (obj && typeof obj.description === 'string') {
-        obj.description = obj.description.replace(/\s+$/, '') + (cleanAccount ? CLEAN_LINE : '') + LISTING_FOOTERS[loginMethod];
+        obj.description = fixedDescription(descriptionTypeKey) + (cleanAccount ? CLEAN_LINE : '') + LISTING_FOOTERS[loginMethod];
       }
     };
     appendFooter(parsed.listing);
