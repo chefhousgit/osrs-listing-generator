@@ -57,6 +57,7 @@ Browser  →  Local Express server  →  Cloudflare Worker proxy  →  Anthropic
 2. Drag screenshots onto the drop zone, or click to browse. Any combination works: stats panel, bank, gear, quest log, achievements, overview page, collection log, clue scroll progress, etc.
 3. Pick the options that apply:
    - **Account type** — Auto lets the model decide from the screenshots. Main / Ironman / HCIM / UIM force it: the title leads with the type (for example `1007 Total Level Hardcore Ironman | HCIM | ...`) and the description calls it that kind of account.
+   - **Ban history** — Clean (default) puts `✅ Clean account, no bans` at the top of the footer; Had a ban before leaves it out.
    - **Login method** — picks the handover lines in the footer. Legacy email lists the login email and legacy password; Jagex Launcher lists email, password, and authenticator key.
    - **Title / Description emojis** — toggle emojis on or off for each.
    - **Gear** (side tab) — tick items the account actually has. These override anything the model might misread. The ★ Title pill forces an item into the title.

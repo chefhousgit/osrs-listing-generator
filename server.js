@@ -168,7 +168,7 @@ DESCRIPTION RULES (simple):
   - "Well-rounded skiller with several gathering skills trained up and ready to keep building."
 - Do not claim anything the screenshots or hiscores do not support (for example do not say "resources banked" unless a bank screenshot shows it). Keep it vague rather than wrong.
 - Never use "maxed", "max", "complete", or "all" in this sentence. Prefer soft wording like "several skills trained", "solid combat stats", "good progress".
-- The server appends a fixed footer (handover details, terms) after your sentence. Do NOT write any of that yourself.
+- The server appends a fixed footer (clean-account line when applicable, handover details, terms) after your sentence. Do NOT write any of that yourself.
 
 Important rules:
 - NEVER include the account's username
@@ -228,7 +228,12 @@ const LISTING_TERMS = `🧾 Terms and Conditions:
 
 It is your responsibility to secure the account including changing account details such as the email and password. I am not responsible for bans or account locks that happen after the account is in your possession (once login details are delivered). This includes macro bans, RWT bans, or any rule breaking bans. No refunds or replacements will be provided for bans where the ban date is on or after the sale date.`;
 
+const CLEAN_LINE = `
+
+✅ Clean account, no bans`;
+
 // Appended after the model's one-sentence description, for every account type.
+// CLEAN_LINE goes in front of it when the account has no ban history.
 const LISTING_FOOTERS = {
   legacy: `
 
@@ -394,6 +399,7 @@ app.post('/generate', upload.array('images', 20), async (req, res) => {
     const accountType = ACCOUNT_TYPES[rawAccountType] ? rawAccountType : null;
 
     const loginMethod = String(req.body.loginMethod || 'legacy').toLowerCase() === 'jagex' ? 'jagex' : 'legacy';
+    const cleanAccount = String(req.body.cleanAccount || 'true') !== 'false';
 
     let hiddenSkills = [];
     try {
@@ -652,7 +658,7 @@ Return ONLY the JSON object, no markdown fences, no preamble.`
 
     const appendFooter = (obj) => {
       if (obj && typeof obj.description === 'string') {
-        obj.description = obj.description.replace(/\s+$/, '') + LISTING_FOOTERS[loginMethod];
+        obj.description = obj.description.replace(/\s+$/, '') + (cleanAccount ? CLEAN_LINE : '') + LISTING_FOOTERS[loginMethod];
       }
     };
     appendFooter(parsed.listing);

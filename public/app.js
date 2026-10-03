@@ -217,6 +217,7 @@ const redactions = new Map();
 
 let accountType = 'auto';
 let loginMethod = 'legacy';
+let banHistory = 'clean';
 
 function wirePillGroup(groupEl, onChange) {
   groupEl.querySelectorAll('.pill').forEach((btn) => {
@@ -232,6 +233,7 @@ function wirePillGroup(groupEl, onChange) {
 }
 wirePillGroup(document.getElementById('accountTypeGroup'), (v) => { accountType = v; });
 wirePillGroup(document.getElementById('loginMethodGroup'), (v) => { loginMethod = v; });
+wirePillGroup(document.getElementById('banHistoryGroup'), (v) => { banHistory = v; });
 
 function getHiddenSkills() {
   const set = new Set();
@@ -673,6 +675,7 @@ generateBtn.addEventListener('click', async () => {
   formData.append('descEmojis', descEmojis ? 'true' : 'false');
   formData.append('accountType', accountType);
   formData.append('loginMethod', loginMethod);
+  formData.append('cleanAccount', banHistory === 'clean' ? 'true' : 'false');
   const hiddenSkills = getHiddenSkills();
   if (hiddenSkills.length > 0) formData.append('hiddenSkills', JSON.stringify(hiddenSkills));
 
