@@ -155,15 +155,16 @@ function buildAccountOffer(input) {
       offerAttributes
     },
     accountSecretDetails: [],
+    // Mirrors Eldorado's sell form: a details group is null when all its fields are empty,
+    // otherwise every field is a string ("" for blanks).
     accountDeliveryDetails: hasDelivery
       ? [{
+          id: null,
           accountDetails: { accountLogin: delivery.accountLogin, accountPassword: delivery.accountPassword },
-          emailDetails: {
-            emailProviderUrl: delivery.emailProviderUrl || null,
-            emailLogin: delivery.emailLogin || null,
-            emailPassword: delivery.emailPassword || null
-          },
-          mfaDetails: { mfaLogin: null, mfaPassword: null },
+          emailDetails: delivery.emailProviderUrl || delivery.emailLogin || delivery.emailPassword
+            ? { emailProviderUrl: delivery.emailProviderUrl, emailLogin: delivery.emailLogin, emailPassword: delivery.emailPassword }
+            : null,
+          mfaDetails: null,
           additionalInfo: delivery.additionalInfo || null
         }]
       : []
