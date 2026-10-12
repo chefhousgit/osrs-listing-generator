@@ -72,19 +72,38 @@ Browser  →  Local Express server  →  Cloudflare Worker proxy  →  Anthropic
 9. After the sale, open **Buyer handover message** (under the option pills), paste the 2FA secret key, and hit **Copy message**. The RSN fills in from the account name box.
 10. Hit **Clear** to reset and run another account.
 
+## Publishing to Eldorado (optional)
+
+With Eldorado seller API credentials in `.env`, a **Publish to Eldorado** button appears under the description. It creates the listing as an OSRS account offer and pauses it straight away, so nothing goes live without pictures.
+
+1. On Eldorado, open **Dashboard → Seller API** and generate credentials. The client secret is shown only once.
+2. Add them to `.env` and restart the app:
+   ```
+   ELDORADO_CLIENT_ID=...
+   ELDORADO_CLIENT_SECRET=...
+   ```
+3. After generating a listing, click **Publish to Eldorado**. Title, description, type, login method, and the combat / total level / quest point brackets are pre-filled from the listing; pick **Pets** and enter a **price**.
+4. Optionally fill in the delivery details (account login and password, email, additional info) for instant delivery. They go straight to Eldorado, are never written to disk, and are wiped when the dialog closes. Additional info starts as the buyer handover message.
+5. Click **Create offer (paused)**, then add the images on Eldorado and resume the offer there. The seller API has no image upload.
+
+There is no Eldorado sandbox: every publish creates a real offer on your account.
+
 The app only uses information visible in your screenshots or returned by the hiscores. Numbers are reported exactly or omitted; nothing is rounded up or invented. If a number looks off, open the **Debug** panel under the listing to see what the model claims to have read.
 
 ## Security notes
 
 - The Anthropic API key is **never** stored on this machine. It lives only on the Cloudflare Worker as an encrypted secret.
 - The local `.env` file contains only the proxy URL and the shared secret password.
-- `.env` is gitignored so it will never be committed.
+- `.env` is gitignored so it will never be committed. It may also hold the Eldorado seller API client ID and secret.
+- Eldorado delivery details typed into the publish dialog are passed straight to Eldorado and never logged or stored.
 - Uploaded screenshots are held in memory during the request and are not written to disk.
 
 ## Troubleshooting
 
 - **"Proxy authentication failed"** — your `PROXY_SECRET` in `.env` does not match the one set on the Cloudflare Worker. Regenerate or re-copy it.
 - **"Could not reach the proxy"** — check `PROXY_URL` in `.env`. It should be the full `https://...workers.dev` URL, no trailing slash, no `/generate` suffix.
+- **"Eldorado rejected the API credentials"** — the client ID/secret in `.env` is wrong, expired, or revoked. Generate new ones on the Seller API page.
+- **No Publish to Eldorado button** — `ELDORADO_CLIENT_ID` or `ELDORADO_CLIENT_SECRET` is missing from `.env`, or the app wasn't restarted after adding them.
 - **Server starts but generation fails silently** — check the terminal running `npm start` for error logs.
 
 ## Project layout
@@ -95,11 +114,15 @@ osrs-listing-generator/
 ├── .gitignore
 ├── package.json
 ├── server.js              Express server: prompt, hiscores lookup, quadrant crops, footer, proxy call
+├── eldorado.js            Eldorado seller API client: token cache, offer payload, create + pause
+├── data/
+│   └── eldorado-osrs.json OSRS account builds and required offer attributes on Eldorado
 ├── start.bat / update.bat Windows helpers: launch the app / git pull latest
 ├── public/
 │   ├── index.html         Single-page UI
 │   ├── style.css          Dark OSRS-flavored theme
 │   ├── app.js             Frontend logic: uploads, options, gear drawer, results
+│   ├── eldorado.js        Publish to Eldorado dialog
 │   └── redact.js          Skill blackout tool (calibrated skills grid + free-hand boxes)
 ├── worker/
 │   ├── worker.js          Cloudflare Worker proxy script

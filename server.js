@@ -3,6 +3,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const sharp = require('sharp');
+const eldorado = require('./eldorado');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -688,6 +689,33 @@ Return ONLY the JSON object, no markdown fences, no preamble.`
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error', detail: err.message });
+  }
+});
+
+// ---------- Eldorado seller API ----------
+// Credentials live in .env (ELDORADO_CLIENT_ID / ELDORADO_CLIENT_SECRET). Offers are created
+// and then paused straight away; images are added by hand on the site before resuming.
+
+app.get('/eldorado/config', (req, res) => {
+  res.json({
+    configured: eldorado.isConfigured(),
+    osrs: eldorado.OSRS,
+    deliveryTimes: eldorado.DELIVERY_TIMES
+  });
+});
+
+app.post('/eldorado/publish', express.json({ limit: '100kb' }), async (req, res) => {
+  if (!eldorado.isConfigured()) {
+    return res.status(500).json({ error: 'Eldorado API is not set up. Add ELDORADO_CLIENT_ID and ELDORADO_CLIENT_SECRET to .env and restart.' });
+  }
+  try {
+    const result = await eldorado.publishPausedAccountOffer(req.body || {});
+    res.json(result);
+  } catch (err) {
+    // Never log the request body: it can hold account passwords.
+    console.error('Eldorado publish failed:', err.message);
+    const status = err instanceof eldorado.EldoradoError && err.status >= 400 && err.status < 600 ? err.status : 500;
+    res.status(status).json({ error: err.message });
   }
 });
 

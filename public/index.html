@@ -108,6 +108,7 @@
           <label>Description <span class="edit-hint">(editable)</span></label>
           <textarea class="output-desc" spellcheck="false"></textarea>
           <button class="copy-btn" data-copy="desc">Copy Description</button>
+          <button type="button" id="eldoradoBtn" class="primary-btn eldorado-btn hidden" title="Create this listing on Eldorado.gg as a paused offer">Publish to Eldorado</button>
         </article>
       </div>
 
@@ -235,8 +236,84 @@
     </div>
   </div>
 
+  <div id="eldoradoModal" class="redact-modal hidden" role="dialog" aria-modal="true" aria-label="Publish to Eldorado">
+    <div class="redact-dialog eldorado-dialog">
+      <header class="redact-header">
+        <h2>Publish to Eldorado</h2>
+        <button id="eldoradoClose" class="gear-close" type="button" aria-label="Close">×</button>
+      </header>
+      <p class="redact-help">Creates the offer on your live Eldorado account and pauses it straight away. Add the images on Eldorado, then resume it there.</p>
+      <form id="eldoradoForm" class="eldorado-body" autocomplete="off">
+        <label class="card-field">
+          <span>Title</span>
+          <input type="text" id="edTitle" required />
+        </label>
+        <label class="card-field">
+          <span>Description</span>
+          <textarea id="edDescription" rows="7" spellcheck="false" required></textarea>
+        </label>
+        <div class="card-field-row eldorado-row-3">
+          <label class="card-field">
+            <span>Price (USD)</span>
+            <input type="text" id="edPrice" inputmode="decimal" placeholder="e.g. 50" required />
+          </label>
+          <label class="card-field">
+            <span>Delivery time</span>
+            <select id="edDelivery"></select>
+          </label>
+          <label class="card-field">
+            <span>Account build</span>
+            <select id="edBuild"></select>
+          </label>
+        </div>
+        <div id="edAttributes" class="eldorado-attrs"></div>
+
+        <h3 class="eldorado-section">Delivery details <small>(sent to Eldorado for instant delivery, never saved here)</small></h3>
+        <div class="card-field-row">
+          <label class="card-field">
+            <span>Account login</span>
+            <input type="text" id="edAccountLogin" spellcheck="false" />
+          </label>
+          <label class="card-field">
+            <span>Account password</span>
+            <input type="text" id="edAccountPassword" spellcheck="false" />
+          </label>
+        </div>
+        <div class="card-field-row">
+          <label class="card-field">
+            <span>Email login <small>(optional)</small></span>
+            <input type="text" id="edEmailLogin" spellcheck="false" />
+          </label>
+          <label class="card-field">
+            <span>Email password <small>(optional)</small></span>
+            <input type="text" id="edEmailPassword" spellcheck="false" />
+          </label>
+        </div>
+        <label class="card-field">
+          <span>Email provider URL <small>(optional)</small></span>
+          <input type="text" id="edEmailProvider" spellcheck="false" placeholder="e.g. https://mail.proton.me" />
+        </label>
+        <label class="card-field">
+          <span>Additional info for the buyer <small>(starts as the handover message)</small></span>
+          <textarea id="edAdditional" rows="6" spellcheck="false"></textarea>
+        </label>
+        <label class="card-check">
+          <input type="checkbox" id="edOriginalEmail" />
+          <span>Original email included</span>
+        </label>
+      </form>
+      <footer class="redact-footer">
+        <span id="eldoradoNote" class="gear-selected-text"></span>
+        <div class="redact-footer-actions">
+          <button type="submit" form="eldoradoForm" id="eldoradoSubmit" class="primary-btn">Create offer (paused)</button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
   <script src="redact.js"></script>
   <script src="card.js"></script>
   <script src="app.js"></script>
+  <script src="eldorado.js"></script>
 </body>
 </html>

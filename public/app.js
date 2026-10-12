@@ -541,8 +541,11 @@ function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+let lastResult = null;
+
 function renderResults(data) {
   clearCards();
+  lastResult = data;
 
   metaRow.innerHTML = '';
   const typeBadge = document.createElement('span');
@@ -759,3 +762,17 @@ handoverCopy.addEventListener('click', async () => {
     alert('Copy failed: ' + e.message);
   }
 });
+
+// Snapshot of the current listing for the Eldorado publish dialog (eldorado.js).
+window.getListingContext = function () {
+  if (!lastResult) return null;
+  const card = document.querySelector('.version-card[data-version="hype"]');
+  return {
+    result: lastResult,
+    title: card ? card.querySelector('.output-title').textContent : '',
+    description: card ? card.querySelector('.output-desc').value : '',
+    accountType,
+    loginMethod,
+    handover: handoverText.value
+  };
+};
