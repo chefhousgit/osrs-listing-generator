@@ -358,6 +358,8 @@ cardBtn.addEventListener('click', () => {
 
 clearBtn.addEventListener('click', () => {
   if (window.resetEldoradoPanel) window.resetEldoradoPanel();
+  currentFolder = null;
+  folderPick.value = '';
   selectedFiles = [];
   redactions.clear();
   refreshPreviews();
@@ -765,6 +767,86 @@ handoverCopy.addEventListener('click', async () => {
   }
 });
 
+// ---------- Account folders (ACCOUNTS_DIR) ----------
+// Picking a folder starts a fresh listing: its screenshots, the RSN and type/ban from the folder
+// name ("Zezima - hc - temp"). The Eldorado panel reads the folder's login.txt and, after a
+// publish, the server moves the folder to Listed.
+const folderRow = document.getElementById('folderRow');
+const folderPick = document.getElementById('folderPick');
+const folderHint = document.getElementById('folderHint');
+const folderReload = document.getElementById('folderReload');
+let currentFolder = null;
+let folderList = [];
+
+function setPill(groupId, value) {
+  const btn = document.querySelector(`#${groupId} .pill[data-value="${value}"]`);
+  if (btn) btn.click();
+}
+
+async function loadFolders() {
+  try {
+    const data = await fetch('/folders').then((r) => r.json());
+    if (!data.configured) return;
+    folderRow.classList.remove('hidden');
+    folderList = data.folders || [];
+    const keep = currentFolder;
+    folderPick.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = data.error ? 'Could not read ACCOUNTS_DIR' : (folderList.length ? 'Pick an account folder...' : 'No account folders left to list');
+    folderPick.appendChild(placeholder);
+    folderList.forEach((f) => {
+      const o = document.createElement('option');
+      o.value = f.name;
+      o.textContent = `${f.name}  (${f.images} img${f.hasLogin ? '' : ', no login.txt'})`;
+      folderPick.appendChild(o);
+    });
+    folderPick.value = folderList.some((f) => f.name === keep) ? keep : '';
+    folderHint.textContent = data.error || 'Loads the folder\'s screenshots, account name, type and login.txt.';
+  } catch (e) {
+    folderHint.textContent = 'Could not load the account folders.';
+  }
+}
+
+folderPick.addEventListener('change', async () => {
+  const name = folderPick.value;
+  if (!name) return;
+  const folder = folderList.find((f) => f.name === name);
+  clearBtn.click();
+  folderPick.value = name;
+  currentFolder = name;
+
+  usernameInput.value = folder.rsn.slice(0, 12);
+  usernameInput.dispatchEvent(new Event('input'));
+  setPill('accountTypeGroup', folder.type);
+  setPill('banHistoryGroup', folder.tempBan ? 'banned' : 'clean');
+
+  folderHint.textContent = 'Loading screenshots...';
+  try {
+    const base = '/folders/' + encodeURIComponent(name) + '/images';
+    const { images, error } = await fetch(base).then((r) => r.json());
+    if (error) throw new Error(error);
+    const files = await Promise.all(images.map(async (file) => {
+      const blob = await fetch(base + '/' + encodeURIComponent(file)).then((r) => r.blob());
+      return new File([blob], file, { type: blob.type });
+    }));
+    if (currentFolder !== name) return; // picked another folder meanwhile
+    addFiles(files);
+    const typeText = folder.type === 'auto' ? 'type: Auto' : 'type: ' + folder.type.toUpperCase();
+    folderHint.textContent = `${files.length} screenshot${files.length === 1 ? '' : 's'}, ${typeText}${folder.tempBan ? ', had a temp ban' : ''}${folder.hasLogin ? ', login.txt found' : ', no login.txt'}.`;
+  } catch (e) {
+    folderHint.textContent = 'Could not load the screenshots: ' + e.message;
+  }
+});
+folderReload.addEventListener('click', loadFolders);
+loadFolders();
+
+// Called by the Eldorado panel after a publish moved the folder to Listed.
+window.folderPublished = function () {
+  currentFolder = null;
+  loadFolders();
+};
+
 // Put a 2FA secret key on the "2FA Secret Key:" line of a message (added at the end if missing).
 window.withSecretKey = function (text, key) {
   const line = /^2FA Secret Key:.*$/m;
@@ -788,6 +870,7 @@ window.getListingContext = function () {
     loginMethod,
     handover: handoverText.value,
     files: selectedFiles.slice(),
-    isRedacted: (file) => redactions.has(file)
+    isRedacted: (file) => redactions.has(file),
+    folder: currentFolder
   };
 };

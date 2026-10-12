@@ -64,6 +64,28 @@ html, body {
   flex-wrap: wrap;
 }
 
+.folder-pick {
+  display: flex;
+  gap: 8px;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.folder-pick select {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--bg-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font: inherit;
+}
+
+.folder-pick button {
+  white-space: nowrap;
+}
+
 .username-row label {
   display: flex;
   flex-direction: column;

@@ -291,6 +291,25 @@
     submitBtn.disabled = false;
     submitBtn.textContent = 'Create offer (paused)';
     setNote('Red: still needs picking. Amber: best guess, check it.', null);
+    if (ctx.folder) fillFromFolder(ctx.folder);
+  }
+
+  // Delivery login from the account folder's login.txt (email:password:key).
+  async function fillFromFolder(folder) {
+    try {
+      const res = await fetch('/folders/' + encodeURIComponent(folder) + '/login', { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (!ctx || ctx.folder !== folder) return;
+      if (!res.ok) throw new Error(data.error || 'status ' + res.status);
+      if (!data.login) {
+        accountHint.textContent = `(no login.txt in "${folder}": pick one or type it in)`;
+        return;
+      }
+      applyAccount(data.login);
+      accountHint.textContent = `(filled from "${folder}\\login.txt")`;
+    } catch (err) {
+      accountHint.textContent = '(could not read login.txt: ' + err.message + ')';
+    }
   }
 
   function reset() {
@@ -328,7 +347,8 @@
       attributes: Object.fromEntries(Object.entries(attrSelects).map(([id, sel]) => [id, sel.value])),
       numeric: Object.fromEntries(Object.entries(numInputs).map(([id, input]) => [id, input.value.trim()])),
       hasOriginalEmail: originalEmailInput.checked,
-      delivery: { accountLogin, accountPassword, emailLogin, emailPassword, emailProviderUrl, additionalInfo: additionalInput.value }
+      delivery: { accountLogin, accountPassword, emailLogin, emailPassword, emailProviderUrl, additionalInfo: additionalInput.value },
+      folder: ctx && ctx.folder ? ctx.folder : null
     };
 
     submitBtn.disabled = true;
@@ -352,6 +372,12 @@
         setNote(`Created and paused (offer ${data.offerId}) with the listing card as its main image. Add more images on Eldorado if you like, then resume it there.${noDelivery}`, 'ok');
       } else {
         setNote(`Created (offer ${data.offerId}) but it could NOT be paused, so it is LIVE without images. Pause it on Eldorado now. ${data.pauseError || ''}`, 'error');
+      }
+      if (data.movedTo) {
+        noteEl.textContent += ` Folder moved to ${data.movedTo}.`;
+        if (window.folderPublished) window.folderPublished();
+      } else if (data.moveError) {
+        noteEl.textContent += ` Could not move the folder to Listed: ${data.moveError}`;
       }
       submitBtn.textContent = 'Done';
     } catch (err) {

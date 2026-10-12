@@ -5,6 +5,7 @@ const path = require('path');
 const sharp = require('sharp');
 const eldorado = require('./eldorado');
 const accounts = require('./accounts');
+const folders = require('./folders');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -749,6 +750,44 @@ app.get('/accounts/:id', async (req, res) => {
   }
 });
 
+// ---------- Account folders (ACCOUNTS_DIR in .env) ----------
+
+const folderError = (res, err) => res.status(err.status || 500).json({ error: err.message });
+
+app.get('/folders', async (req, res) => {
+  if (!folders.isConfigured()) return res.json({ configured: false, folders: [] });
+  try {
+    res.json({ configured: true, folders: await folders.listFolders() });
+  } catch (err) {
+    res.status(500).json({ configured: true, error: err.message });
+  }
+});
+
+app.get('/folders/:name/images', async (req, res) => {
+  try {
+    res.json({ images: await folders.listImages(req.params.name) });
+  } catch (err) {
+    folderError(res, err);
+  }
+});
+
+app.get('/folders/:name/images/:file', async (req, res) => {
+  try {
+    const img = await folders.readImage(req.params.name, req.params.file);
+    res.type(img.type).set('Cache-Control', 'no-store').send(img.buffer);
+  } catch (err) {
+    folderError(res, err);
+  }
+});
+
+app.get('/folders/:name/login', async (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store').json({ login: await folders.readLogin(req.params.name) });
+  } catch (err) {
+    folderError(res, err);
+  }
+});
+
 app.get('/eldorado/config', (req, res) => {
   res.json({
     configured: eldorado.isConfigured(),
@@ -770,6 +809,14 @@ app.post('/eldorado/publish', upload.single('mainImage'), async (req, res) => {
       return res.status(400).json({ error: 'Bad publish request.' });
     }
     const result = await eldorado.publishPausedAccountOffer(payload, req.file);
+    // The offer exists now, so file the account folder away (if it came from one).
+    if (payload.folder && folders.isConfigured()) {
+      try {
+        result.movedTo = await folders.moveToListed(String(payload.folder));
+      } catch (err) {
+        result.moveError = err.message;
+      }
+    }
     res.json(result);
   } catch (err) {
     // Never log the request body: it can hold account passwords.
