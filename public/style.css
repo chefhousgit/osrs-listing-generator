@@ -1221,22 +1221,50 @@ html, body {
 }
 
 /* ---------- Publish to Eldorado ---------- */
-.eldorado-btn {
-  margin-top: 10px;
+.eldorado-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color-scheme: dark;
 }
 
-.eldorado-dialog {
-  width: min(720px, 100%);
-  color-scheme: dark;
+.eldorado-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.eldorado-panel-header h3 {
+  margin: 0;
+  color: var(--gold);
+}
+
+.eldorado-panel > .hint {
+  margin: 0;
 }
 
 .eldorado-body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 4px 16px 16px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  min-width: 0;
+}
+
+.eldorado-panel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
 
 .eldorado-body .card-field textarea {
@@ -1304,11 +1332,6 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-/* Card builder opened from the publish dialog sits above it. */
-.redact-modal.card-on-top {
-  z-index: 70;
 }
 
 .eldorado-section {

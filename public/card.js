@@ -352,7 +352,7 @@
     return first.replace(/[\p{Extended_Pictographic}️]/gu, '').replace(/\s+/g, ' ').trim();
   }
 
-  let onUse = null; // set when opened from the publish dialog: Save hands the card back instead
+  let onUse = null; // set when opened from the Eldorado panel: Save hands the card back instead
 
   // Load screenshots and fill the inputs with the defaults (remembered prefs + auto tags).
   async function prepare({ files, isRedacted, title, loginMethod, price }) {
@@ -384,7 +384,6 @@
   window.openCardTool = async function (opts) {
     onUse = typeof opts.onUse === 'function' ? opts.onUse : null;
     saveBtn.textContent = onUse ? 'Use this card' : 'Save image';
-    modal.classList.toggle('card-on-top', Boolean(onUse));
     modal.classList.remove('hidden');
     noteEl.textContent = 'Loading...';
     await prepare(opts);
@@ -401,7 +400,6 @@
     return blob;
   };
 
-  window.isCardToolOpen = () => !modal.classList.contains('hidden');
 
   function close() {
     modal.classList.add('hidden');
@@ -412,11 +410,7 @@
   closeBtn.addEventListener('click', close);
   modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
-      // Opened from the publish dialog: only close the card builder, not the dialog under it.
-      if (onUse) e.stopImmediatePropagation();
-      close();
-    }
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) close();
   });
 
   [titleInput, tagsInput, dateInput, priceInput].forEach((el) => el.addEventListener('input', queueRender));

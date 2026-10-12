@@ -357,6 +357,7 @@ cardBtn.addEventListener('click', () => {
 });
 
 clearBtn.addEventListener('click', () => {
+  if (window.resetEldoradoPanel) window.resetEldoradoPanel();
   selectedFiles = [];
   redactions.clear();
   refreshPreviews();
@@ -609,6 +610,7 @@ function renderResults(data) {
   renderResultImages();
 
   resultsSection.classList.remove('hidden');
+  if (window.fillEldoradoPanel) window.fillEldoradoPanel();
 }
 
 function renderResultImages() {

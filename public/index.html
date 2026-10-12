@@ -108,9 +108,92 @@
           <label>Description <span class="edit-hint">(editable)</span></label>
           <textarea class="output-desc" spellcheck="false"></textarea>
           <button class="copy-btn" data-copy="desc">Copy Description</button>
-          <button type="button" id="eldoradoBtn" class="primary-btn eldorado-btn hidden" title="Create this listing on Eldorado.gg as a paused offer">Publish to Eldorado</button>
         </article>
       </div>
+
+      <section id="eldoradoPanel" class="eldorado-panel hidden">
+        <header class="eldorado-panel-header">
+          <h3>Publish to Eldorado</h3>
+          <span class="tag">Filled in from the listing</span>
+        </header>
+        <p class="hint">Check and edit everything here. <strong>Create offer (paused)</strong> uploads the listing card as the main image, creates the offer on your live Eldorado account and pauses it, so you can look it over on Eldorado and resume it there.</p>
+        <form id="eldoradoForm" class="eldorado-body" autocomplete="off">
+          <label class="card-field">
+            <span>Title</span>
+            <input type="text" id="edTitle" required />
+          </label>
+          <label class="card-field">
+            <span>Description</span>
+            <textarea id="edDescription" rows="7" spellcheck="false" required></textarea>
+          </label>
+          <div class="card-field-row eldorado-row-3">
+            <label class="card-field">
+              <span>Price (USD)</span>
+              <input type="text" id="edPrice" inputmode="decimal" placeholder="e.g. 50" required />
+            </label>
+            <label class="card-field">
+              <span>Delivery time</span>
+              <select id="edDelivery"></select>
+            </label>
+            <label class="card-field">
+              <span>Account build</span>
+              <select id="edBuild"></select>
+            </label>
+          </div>
+          <div class="card-field">
+            <span>Main image <small id="edImageSource">(listing card, built from your screenshots)</small></span>
+            <div class="eldorado-image">
+              <img id="edImagePreview" alt="Main image preview" />
+              <div class="eldorado-image-actions">
+                <button type="button" id="edEditCard" class="secondary-btn">Edit card</button>
+                <button type="button" id="edPickFile" class="secondary-btn">Use a file instead</button>
+                <button type="button" id="edAutoCard" class="secondary-btn hidden">Back to auto card</button>
+                <input type="file" id="edImageFile" accept="image/png,image/jpeg,image/webp" hidden />
+              </div>
+            </div>
+          </div>
+          <div id="edAttributes" class="eldorado-attrs"></div>
+          <div id="edNumeric" class="eldorado-attrs eldorado-numeric"></div>
+
+          <h3 class="eldorado-section">Delivery details <small>(sent to Eldorado for instant delivery, never saved here)</small></h3>
+          <div class="card-field-row">
+            <label class="card-field">
+              <span>Account login</span>
+              <input type="text" id="edAccountLogin" spellcheck="false" />
+            </label>
+            <label class="card-field">
+              <span>Account password</span>
+              <input type="text" id="edAccountPassword" spellcheck="false" />
+            </label>
+          </div>
+          <div class="card-field-row">
+            <label class="card-field">
+              <span>Email login <small>(optional)</small></span>
+              <input type="text" id="edEmailLogin" spellcheck="false" />
+            </label>
+            <label class="card-field">
+              <span>Email password <small>(optional)</small></span>
+              <input type="text" id="edEmailPassword" spellcheck="false" />
+            </label>
+          </div>
+          <label class="card-field">
+            <span>Email provider URL <small>(optional)</small></span>
+            <input type="text" id="edEmailProvider" spellcheck="false" placeholder="e.g. https://mail.proton.me" />
+          </label>
+          <label class="card-field">
+            <span>Additional info for the buyer <small>(starts as the handover message)</small></span>
+            <textarea id="edAdditional" rows="6" spellcheck="false"></textarea>
+          </label>
+          <label class="card-check">
+            <input type="checkbox" id="edOriginalEmail" />
+            <span>Original email included</span>
+          </label>
+        </form>
+        <footer class="eldorado-panel-footer">
+          <span id="eldoradoNote" class="gear-selected-text"></span>
+          <button type="submit" form="eldoradoForm" id="eldoradoSubmit" class="primary-btn">Create offer (paused)</button>
+        </footer>
+      </section>
 
       <section id="resultImages" class="result-images hidden">
         <h3>Images to upload with the listing</h3>
@@ -231,94 +314,6 @@
         <span id="cardNote" class="gear-selected-text"></span>
         <div class="redact-footer-actions">
           <button type="button" id="cardSave" class="primary-btn">Save image</button>
-        </div>
-      </footer>
-    </div>
-  </div>
-
-  <div id="eldoradoModal" class="redact-modal hidden" role="dialog" aria-modal="true" aria-label="Publish to Eldorado">
-    <div class="redact-dialog eldorado-dialog">
-      <header class="redact-header">
-        <h2>Publish to Eldorado</h2>
-        <button id="eldoradoClose" class="gear-close" type="button" aria-label="Close">×</button>
-      </header>
-      <p class="redact-help">Uploads the listing card as the main image, creates the offer on your live Eldorado account, and pauses it straight away. Check it on Eldorado (add more images if you like), then resume it there.</p>
-      <form id="eldoradoForm" class="eldorado-body" autocomplete="off">
-        <label class="card-field">
-          <span>Title</span>
-          <input type="text" id="edTitle" required />
-        </label>
-        <label class="card-field">
-          <span>Description</span>
-          <textarea id="edDescription" rows="7" spellcheck="false" required></textarea>
-        </label>
-        <div class="card-field-row eldorado-row-3">
-          <label class="card-field">
-            <span>Price (USD)</span>
-            <input type="text" id="edPrice" inputmode="decimal" placeholder="e.g. 50" required />
-          </label>
-          <label class="card-field">
-            <span>Delivery time</span>
-            <select id="edDelivery"></select>
-          </label>
-          <label class="card-field">
-            <span>Account build</span>
-            <select id="edBuild"></select>
-          </label>
-        </div>
-        <div class="card-field">
-          <span>Main image <small id="edImageSource">(listing card, built from your screenshots)</small></span>
-          <div class="eldorado-image">
-            <img id="edImagePreview" alt="Main image preview" />
-            <div class="eldorado-image-actions">
-              <button type="button" id="edEditCard" class="secondary-btn">Edit card</button>
-              <button type="button" id="edPickFile" class="secondary-btn">Use a file instead</button>
-              <button type="button" id="edAutoCard" class="secondary-btn hidden">Back to auto card</button>
-              <input type="file" id="edImageFile" accept="image/png,image/jpeg,image/webp" hidden />
-            </div>
-          </div>
-        </div>
-        <div id="edAttributes" class="eldorado-attrs"></div>
-        <div id="edNumeric" class="eldorado-attrs eldorado-numeric"></div>
-
-        <h3 class="eldorado-section">Delivery details <small>(sent to Eldorado for instant delivery, never saved here)</small></h3>
-        <div class="card-field-row">
-          <label class="card-field">
-            <span>Account login</span>
-            <input type="text" id="edAccountLogin" spellcheck="false" />
-          </label>
-          <label class="card-field">
-            <span>Account password</span>
-            <input type="text" id="edAccountPassword" spellcheck="false" />
-          </label>
-        </div>
-        <div class="card-field-row">
-          <label class="card-field">
-            <span>Email login <small>(optional)</small></span>
-            <input type="text" id="edEmailLogin" spellcheck="false" />
-          </label>
-          <label class="card-field">
-            <span>Email password <small>(optional)</small></span>
-            <input type="text" id="edEmailPassword" spellcheck="false" />
-          </label>
-        </div>
-        <label class="card-field">
-          <span>Email provider URL <small>(optional)</small></span>
-          <input type="text" id="edEmailProvider" spellcheck="false" placeholder="e.g. https://mail.proton.me" />
-        </label>
-        <label class="card-field">
-          <span>Additional info for the buyer <small>(starts as the handover message)</small></span>
-          <textarea id="edAdditional" rows="6" spellcheck="false"></textarea>
-        </label>
-        <label class="card-check">
-          <input type="checkbox" id="edOriginalEmail" />
-          <span>Original email included</span>
-        </label>
-      </form>
-      <footer class="redact-footer">
-        <span id="eldoradoNote" class="gear-selected-text"></span>
-        <div class="redact-footer-actions">
-          <button type="submit" form="eldoradoForm" id="eldoradoSubmit" class="primary-btn">Create offer (paused)</button>
         </div>
       </footer>
     </div>

@@ -56,7 +56,7 @@ Browser  →  Local Express server  →  Cloudflare Worker proxy  →  Anthropic
 1. Optionally type the OSRS account name. Skill levels are then pulled from the official hiscores and trusted over the screenshots. The name is never shown in the listing.
 2. Drag screenshots onto the drop zone, or click to browse. Any combination works: stats panel, bank, gear, quest log, achievements, overview page, collection log, clue scroll progress, etc.
 3. Pick the options that apply:
-   - **Account type** — Auto lets the model decide from the screenshots. Main / Ironman / HCIM / UIM force it: the title leads with the type (for example `1007 Total Level Hardcore Ironman | HCIM | ...`) and the description calls it that kind of account.
+   - **Account type** — Auto works it out: with an account name, from the official hiscores (the most specific of the ultimate / hardcore / ironman boards whose total XP still matches the main board, so a dead HCIM counts as Ironman and a de-ironed account as Main); without one, the model decides from the screenshots. Main / Ironman / HCIM / UIM force it: the title leads with the type (for example `1007 Total Level Hardcore Ironman | HCIM | ...`) and the description calls it that kind of account.
    - **Ban history** — Clean (default) puts `✅ Clean account, no bans` at the top of the footer; Had a ban before leaves it out.
    - **Login method** — picks the handover lines in the footer. Legacy email lists the login email and legacy password; Jagex Launcher lists email, password, and authenticator key.
    - **Title / Description emojis** — toggle emojis on or off for each.
@@ -66,7 +66,7 @@ Browser  →  Local Express server  →  Cloudflare Worker proxy  →  Anthropic
    - Click skill names to black out their cells, or drag anywhere on the image to draw a box. Undo and Clear all are available.
    - **Save image** downloads the redacted PNG. **Apply to upload** swaps the redacted image in for the original, so the model never sees the hidden skills. They are also removed from any hiscores data and the model is told not to mention them.
 5. Click **Generate Listings**.
-6. Copy the **Title** and the **Description** (editable before copying). The description is a fixed sentence (`Great foundation for a main account / an ironman account / a hardcore ironman account / an ultimate ironman account with many skills trained and resources banked.`, using the forced or detected account type) followed by the fixed footer: handover details (per login method) and terms and conditions. The same footer is used for every account type.
+6. Copy the **Title** and the **Description** (editable before copying). With Eldorado set up, these live in the **Publish to Eldorado** panel instead (see below). The description is a fixed sentence (`Great foundation for a main account / an ironman account / a hardcore ironman account / an ultimate ironman account with many skills trained and resources banked.`, using the forced or detected account type) followed by the fixed footer: handover details (per login method) and terms and conditions. The same footer is used for every account type.
 7. Under the description, **Images to upload with the listing** shows each screenshot as the model saw it, with a **Save image** button.
 8. Optionally click **Build listing card** (next to Generate; works as soon as screenshots are uploaded) to combine them into one OSRS-style framed image: stone border, afkVault logo next to the title, yellow tags, optional "Member till" date and price, your chosen screenshots side by side (up to 3, redacted ones pre-selected and used as redacted), and a faded afkVault watermark over the panel. Opacity slider and tags are remembered in your browser. **Save image** downloads the PNG.
 9. After the sale, open **Buyer handover message** (under the option pills), paste the 2FA secret key, and hit **Copy message**. The RSN fills in from the account name box.
@@ -74,7 +74,7 @@ Browser  →  Local Express server  →  Cloudflare Worker proxy  →  Anthropic
 
 ## Publishing to Eldorado (optional)
 
-With Eldorado seller API credentials in `.env`, a **Publish to Eldorado** button appears under the description. It builds the listing card, uploads it as the offer's main image, creates the listing as an OSRS account offer, and pauses it straight away so you can check it before it goes live.
+With Eldorado seller API credentials in `.env`, every generated listing opens straight into a **Publish to Eldorado** panel in the results, already filled in. It builds the listing card, uploads it as the offer's main image, creates the listing as an OSRS account offer, and pauses it straight away so you can check it before it goes live.
 
 1. On Eldorado, open **Dashboard → Seller API** and generate credentials. The client secret is shown only once.
 2. Add them to `.env` and restart the app:
@@ -82,10 +82,10 @@ With Eldorado seller API credentials in `.env`, a **Publish to Eldorado** button
    ELDORADO_CLIENT_ID=...
    ELDORADO_CLIENT_SECRET=...
    ```
-3. After generating a listing, click **Publish to Eldorado** and enter a **price**. Everything else is filled in from the listing: type, login method, and the exact total level, combat level, quest points and pet count (from the hiscores, the model's read of the screenshots, or combat worked out from visible skill levels), which set Eldorado's brackets. Typing an exact number updates its bracket. Fields outlined in amber are best guesses (Regular, 0-99 QP, 0 pets) because nothing in the listing said otherwise; red ones still need picking.
+3. Generate a listing; the panel appears with the title and description (both editable). Enter a **price**. Everything else is filled in from the listing: type, login method, and the exact total level, combat level, quest points and pet count (from the hiscores, the model's read of the screenshots, or combat worked out from visible skill levels), which set Eldorado's brackets. Typing an exact number updates its bracket. Fields outlined in amber are best guesses (Regular, 0-99 QP, 0 pets) because nothing in the listing said otherwise; red ones still need picking.
 4. Fill in the delivery details (account login and password, email, additional info) for **Instant** delivery: Eldorado treats Instant as automatic delivery and refuses it without them. To deliver by hand instead, leave them empty and pick a delivery time of 20 minutes or longer. They go straight to Eldorado, are never written to disk, and are wiped when the dialog closes. Additional info starts as the buyer handover message.
 5. The **Main image** is the listing card, built automatically from your screenshots (redacted ones as redacted) with the price on it. **Edit card** opens the card builder (**Use this card** hands it back); **Use a file instead** picks any image. Eldorado requires a main image.
-6. Click **Create offer (paused)**, check the offer on Eldorado (add more images if you like), then resume it there. Images go through the same upload endpoint Eldorado's own sell form uses; it is not part of the documented seller API, so if Eldorado changes it the dialog shows the upload error.
+6. Click **Create offer (paused)**, check the offer on Eldorado (add more images if you like), then resume it there. Images go through the same upload endpoint Eldorado's own sell form uses; it is not part of the documented seller API, so if Eldorado changes it the panel shows the upload error. Clear or a new Generate wipes the delivery details.
 
 There is no Eldorado sandbox: every publish creates a real offer on your account.
 
@@ -104,7 +104,7 @@ The app only uses information visible in your screenshots or returned by the his
 - **"Proxy authentication failed"** — your `PROXY_SECRET` in `.env` does not match the one set on the Cloudflare Worker. Regenerate or re-copy it.
 - **"Could not reach the proxy"** — check `PROXY_URL` in `.env`. It should be the full `https://...workers.dev` URL, no trailing slash, no `/generate` suffix.
 - **"Eldorado rejected the API credentials"** — the client ID/secret in `.env` is wrong, expired, or revoked. Generate new ones on the Seller API page.
-- **No Publish to Eldorado button** — `ELDORADO_CLIENT_ID` or `ELDORADO_CLIENT_SECRET` is missing from `.env`, or the app wasn't restarted after adding them.
+- **No Publish to Eldorado panel** — `ELDORADO_CLIENT_ID` or `ELDORADO_CLIENT_SECRET` is missing from `.env`, or the app wasn't restarted after adding them.
 - **Server starts but generation fails silently** — check the terminal running `npm start` for error logs.
 
 ## Project layout
@@ -123,7 +123,7 @@ osrs-listing-generator/
 │   ├── index.html         Single-page UI
 │   ├── style.css          Dark OSRS-flavored theme
 │   ├── app.js             Frontend logic: uploads, options, gear drawer, results
-│   ├── eldorado.js        Publish to Eldorado dialog
+│   ├── eldorado.js        Publish to Eldorado panel
 │   └── redact.js          Skill blackout tool (calibrated skills grid + free-hand boxes)
 ├── worker/
 │   ├── worker.js          Cloudflare Worker proxy script

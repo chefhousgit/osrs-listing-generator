@@ -1,10 +1,11 @@
-// Publish to Eldorado dialog. Talks only to the local server (/eldorado/*), which holds the
-// API credentials. Delivery details typed here are sent once and wiped when the dialog closes.
+// Publish to Eldorado panel, shown in the results and filled in every time a listing is generated
+// (window.fillEldoradoPanel / window.resetEldoradoPanel, called from app.js). Talks only to the local
+// server (/eldorado/*), which holds the API credentials. Delivery details typed here are sent once and
+// wiped after a publish, a new generate, or Clear.
 
 (function () {
-  const btn = document.getElementById('eldoradoBtn');
-  const modal = document.getElementById('eldoradoModal');
-  const closeBtn = document.getElementById('eldoradoClose');
+  const panel = document.getElementById('eldoradoPanel');
+  const versionsGrid = document.querySelector('.versions-grid');
   const form = document.getElementById('eldoradoForm');
   const submitBtn = document.getElementById('eldoradoSubmit');
   const noteEl = document.getElementById('eldoradoNote');
@@ -214,6 +215,7 @@
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     previewUrl = blob ? URL.createObjectURL(blob) : null;
     if (previewUrl) imagePreview.src = previewUrl; else imagePreview.removeAttribute('src');
+    imagePreview.classList.toggle('hidden', !previewUrl);
     imageSourceEl.textContent = blob ? SOURCE_LABELS[source] : '(none yet)';
     autoCardBtn.classList.toggle('hidden', !blob || source === 'auto');
   }
@@ -271,7 +273,9 @@
     noteEl.classList.toggle('eldorado-ok', kind === 'ok');
   }
 
-  function open() {
+  function fill() {
+    if (!config) return;
+    reset();
     ctx = window.getListingContext && window.getListingContext();
     if (!ctx) return;
     prefill(ctx);
@@ -282,12 +286,9 @@
     submitBtn.disabled = false;
     submitBtn.textContent = 'Create offer (paused)';
     setNote('Red: still needs picking. Amber: best guess, check it.', null);
-    modal.classList.remove('hidden');
-    priceInput.focus();
   }
 
-  function close() {
-    modal.classList.add('hidden');
+  function reset() {
     // Wipe credentials so they don't sit in the page.
     secretInputs.forEach((el) => { el.value = ''; });
     additionalInput.value = '';
@@ -351,13 +352,8 @@
     }
   });
 
-  btn.addEventListener('click', open);
-  closeBtn.addEventListener('click', close);
-  modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
-  document.addEventListener('keydown', (e) => {
-    // The card builder handles its own Escape when it is open on top of this dialog.
-    if (e.key === 'Escape' && !modal.classList.contains('hidden') && !(window.isCardToolOpen && window.isCardToolOpen())) close();
-  });
+  window.fillEldoradoPanel = fill;
+  window.resetEldoradoPanel = reset;
 
   fetch('/eldorado/config')
     .then((r) => r.json())
@@ -365,7 +361,10 @@
       if (!cfg.configured) return;
       config = cfg;
       buildForm();
-      btn.classList.remove('hidden');
+      // The panel's title/description replace the plain listing card.
+      panel.classList.remove('hidden');
+      versionsGrid.classList.add('hidden');
+      if (window.getListingContext && window.getListingContext()) fill();
     })
     .catch(() => {});
 })();

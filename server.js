@@ -281,6 +281,7 @@ function accountTypeKeyFromLabel(label) {
 
 // Which hiscore board to try first for each user-selected account type.
 const ACCOUNT_TYPE_BOARD = { main: 'main', ironman: 'ironman', hcim: 'hardcore', uim: 'ultimate' };
+const BOARD_ACCOUNT_TYPE = { main: 'main', ironman: 'ironman', hardcore: 'hcim', ultimate: 'uim' };
 
 const HISCORE_SKILLS = [
   'Overall', 'Attack', 'Defence', 'Strength', 'Hitpoints', 'Ranged', 'Prayer',
@@ -328,6 +329,38 @@ function parseHiscoreCsv(text) {
   return skills;
 }
 
+// Fetch one hiscore board. Returns the parsed skills, or null if the name isn't on it.
+async function fetchBoard(ep, encoded) {
+  try {
+    const res = await fetch(`${ep.url}?player=${encoded}`, {
+      method: 'GET',
+      headers: { 'User-Agent': 'osrs-listing-generator/1.0' }
+    });
+    if (!res.ok) return null;
+    const text = await res.text();
+    if (!text || text.length < 20) return null;
+    const skills = parseHiscoreCsv(text);
+    return skills.length < 8 ? null : skills;
+  } catch (e) {
+    return null;
+  }
+}
+
+function hiscoreResult(type, skills) {
+  const levelByName = {};
+  skills.forEach((s) => { if (s.level) levelByName[s.name] = s.level; });
+  return { accountType: type, skills, combatLevel: computeCombatLevel(levelByName) };
+}
+
+const overallXp = (skills) => {
+  const overall = skills && skills.find((s) => s.name === 'Overall');
+  return overall ? overall.xp : null;
+};
+
+// preferredBoard set (type forced by the user): first board that has the name wins.
+// preferredBoard null (Auto): read every board and work out the type. Every account is on the
+// main board; an ironman board only counts if its Overall XP still matches the main board's,
+// since a dead HCIM's hardcore entry and a de-ironed account's ironman entry stop updating.
 async function lookupHiscores(username, preferredBoard) {
   const trimmed = String(username || '').trim();
   if (!trimmed) return null;
@@ -335,36 +368,26 @@ async function lookupHiscores(username, preferredBoard) {
     return { error: 'Invalid OSRS account name. Use letters, numbers, spaces, hyphens, or underscores (max 12 characters).' };
   }
   const encoded = encodeURIComponent(trimmed);
+  const notFound = { error: `No hiscore entry found for "${trimmed}". Check the spelling (or the account may not be ranked).` };
 
-  const endpoints = preferredBoard
-    ? [...HISCORE_ENDPOINTS].sort((a, b) => (a.type === preferredBoard ? -1 : 0) - (b.type === preferredBoard ? -1 : 0))
-    : HISCORE_ENDPOINTS;
-
-  for (const ep of endpoints) {
-    try {
-      const res = await fetch(`${ep.url}?player=${encoded}`, {
-        method: 'GET',
-        headers: { 'User-Agent': 'osrs-listing-generator/1.0' }
-      });
-      if (res.status === 404) continue;
-      if (!res.ok) continue;
-      const text = await res.text();
-      if (!text || text.length < 20) continue;
-      const skills = parseHiscoreCsv(text);
-      if (skills.length < 8) continue;
-      const levelByName = {};
-      skills.forEach((s) => { if (s.level) levelByName[s.name] = s.level; });
-      const combatLevel = computeCombatLevel(levelByName);
-      return {
-        accountType: ep.type,
-        skills,
-        combatLevel
-      };
-    } catch (e) {
-      continue;
+  if (preferredBoard) {
+    const endpoints = [...HISCORE_ENDPOINTS].sort((a, b) => (a.type === preferredBoard ? -1 : 0) - (b.type === preferredBoard ? -1 : 0));
+    for (const ep of endpoints) {
+      const skills = await fetchBoard(ep, encoded);
+      if (skills) return hiscoreResult(ep.type, skills);
     }
+    return notFound;
   }
-  return { error: `No hiscore entry found for "${trimmed}". Check the spelling (or the account may not be ranked).` };
+
+  const boards = await Promise.all(HISCORE_ENDPOINTS.map(async (ep) => [ep.type, await fetchBoard(ep, encoded)]));
+  const byType = Object.fromEntries(boards);
+  if (!byType.main) {
+    const found = boards.find(([, skills]) => skills);
+    return found ? hiscoreResult(found[0], found[1]) : notFound;
+  }
+  const mainXp = overallXp(byType.main);
+  const type = ['ultimate', 'hardcore', 'ironman'].find((t) => byType[t] && overallXp(byType[t]) === mainXp) || 'main';
+  return { ...hiscoreResult(type, byType.main), typeDetected: true };
 }
 
 app.post('/generate', upload.array('images', 20), async (req, res) => {
@@ -414,7 +437,7 @@ app.post('/generate', upload.array('images', 20), async (req, res) => {
     const descEmojis = String(req.body.descEmojis || 'true') !== 'false';
 
     const rawAccountType = String(req.body.accountType || 'auto').toLowerCase();
-    const accountType = ACCOUNT_TYPES[rawAccountType] ? rawAccountType : null;
+    let accountType = ACCOUNT_TYPES[rawAccountType] ? rawAccountType : null;
 
     const loginMethod = String(req.body.loginMethod || 'legacy').toLowerCase() === 'jagex' ? 'jagex' : 'legacy';
     const cleanAccount = String(req.body.cleanAccount || 'true') !== 'false';
@@ -443,6 +466,8 @@ app.post('/generate', upload.array('images', 20), async (req, res) => {
         hiscoresError = result.error;
       } else if (result) {
         hiscoresData = result;
+        // Auto: the hiscores settle the type, same as picking it by hand.
+        if (!accountType && result.typeDetected) accountType = BOARD_ACCOUNT_TYPE[result.accountType];
         if (hiddenSkills.length > 0) {
           // Never hand the model levels the user chose to black out on the screenshot.
           hiscoresData = { ...result, skills: result.skills.filter((s) => !hiddenSkills.includes(s.name)) };
@@ -538,7 +563,7 @@ app.post('/generate', upload.array('images', 20), async (req, res) => {
       : '';
 
     const accountTypeBlock = accountType
-      ? `\n\nACCOUNT TYPE (user-confirmed, authoritative — overrides anything you infer from the screenshots): ${ACCOUNT_TYPES[accountType].label}.\n- The title MUST lead with the total level (if known) followed by "${ACCOUNT_TYPES[accountType].titleLead}", for example "1007 Total Level ${ACCOUNT_TYPES[accountType].titleLead} | 84 Firemaking 🔥 | ...". If the total level is unknown, lead with "${ACCOUNT_TYPES[accountType].titleLead}" directly.\n- The description sentence must refer to it as a ${ACCOUNT_TYPES[accountType].noun}.\n- Set the top-level "accountType" field to "${ACCOUNT_TYPES[accountType].label}".\n- Never call it anything else and never say the type is unclear.`
+      ? `\n\nACCOUNT TYPE (confirmed by the user or the official hiscores, authoritative — overrides anything you infer from the screenshots): ${ACCOUNT_TYPES[accountType].label}.\n- The title MUST lead with the total level (if known) followed by "${ACCOUNT_TYPES[accountType].titleLead}", for example "1007 Total Level ${ACCOUNT_TYPES[accountType].titleLead} | 84 Firemaking 🔥 | ...". If the total level is unknown, lead with "${ACCOUNT_TYPES[accountType].titleLead}" directly.\n- The description sentence must refer to it as a ${ACCOUNT_TYPES[accountType].noun}.\n- Set the top-level "accountType" field to "${ACCOUNT_TYPES[accountType].label}".\n- Never call it anything else and never say the type is unclear.`
       : '';
 
     const hiddenSkillsBlock = hiddenSkills.length > 0
