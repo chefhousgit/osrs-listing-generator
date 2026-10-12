@@ -53,6 +53,7 @@ Browser  →  Local Express server  →  Cloudflare Worker proxy  →  Anthropic
 
 ## How to use
 
+0. Optional, with `ACCOUNTS_DIR` set (see **Account folders** below): pick the account under **Account folder** at the top. It loads that folder's screenshots and fills in the account name, account type and ban history for you.
 1. Optionally type the OSRS account name. Skill levels are then pulled from the official hiscores and trusted over the screenshots. The name is never shown in the listing.
 2. Drag screenshots onto the drop zone, or click to browse. Any combination works: stats panel, bank, gear, quest log, achievements, overview page, collection log, clue scroll progress, etc.
 3. Pick the options that apply:
@@ -71,6 +72,22 @@ Browser  →  Local Express server  →  Cloudflare Worker proxy  →  Anthropic
 8. Optionally click **Build listing card** (next to Generate; works as soon as screenshots are uploaded) to combine them into one OSRS-style framed image: stone border, afkVault logo next to the title, yellow tags, optional "Member till" date and price, your chosen screenshots side by side (up to 3, redacted ones pre-selected and used as redacted), and a faded afkVault watermark over the panel. Opacity slider and tags are remembered in your browser. **Save image** downloads the PNG.
 9. After the sale, open **Buyer handover message** (under the option pills), paste the 2FA secret key, and hit **Copy message**. The RSN fills in from the account name box.
 10. Hit **Clear** to reset and run another account.
+
+## Account folders (optional)
+
+Keep one folder per account you want to list inside a main folder, and point the app at it in `.env`:
+
+```
+ACCOUNTS_DIR=C:\Users\you\Desktop\Accounts
+```
+
+- **Folder name** = the account name (RSN), optionally followed by ` - <tag>` suffixes, in any order:
+  - type: `hcim` or `hc` (HCIM), `uim`, `im` / `iron` (Ironman), `main`. No type tag = Auto (worked out from the hiscores).
+  - `temp`: the account had a temporary ban, so Ban history is set to **Had a ban before**.
+  - Examples: `Zezima`, `Zezima - hc`, `Zezima - hc - temp`.
+- **Inside each folder**: the screenshots (png / jpg / webp, loaded in file-name order) and a `login.txt` with one `email:password:key` line.
+- Picking a folder in **Account folder** clears the page, loads the screenshots, and sets the account name, type and ban history. After Generate, the publish panel fills the login, password and 2FA key from `login.txt` (the key also goes into the buyer handover message).
+- After a successful publish the folder is moved to `ACCOUNTS_DIR\Listed\` (with ` (2)` added if the name is taken), so the picker only shows accounts still to list. **Reload** re-reads the main folder.
 
 ## Publishing to Eldorado (optional)
 
@@ -119,6 +136,7 @@ osrs-listing-generator/
 ├── server.js              Express server: prompt, hiscores lookup, quadrant crops, footer, proxy call
 ├── eldorado.js            Eldorado seller API client: token cache, offer payload, create + pause
 ├── accounts.js            Reads ACCOUNTS_FILE (email:password:key per line) for the delivery details
+├── folders.js             ACCOUNTS_DIR account folders: name/type/ban from the folder name, screenshots, login.txt, move to Listed
 ├── data/
 │   └── eldorado-osrs.json OSRS account builds and required offer attributes on Eldorado
 ├── start.bat / update.bat Windows helpers: launch the app / git pull latest
