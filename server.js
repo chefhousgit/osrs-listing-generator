@@ -4,7 +4,6 @@ const multer = require('multer');
 const path = require('path');
 const sharp = require('sharp');
 const eldorado = require('./eldorado');
-const accounts = require('./accounts');
 const folders = require('./folders');
 
 const app = express();
@@ -724,36 +723,6 @@ Return ONLY the JSON object, no markdown fences, no preamble.`
 // ---------- Eldorado seller API ----------
 // Credentials live in .env (ELDORADO_CLIENT_ID / ELDORADO_CLIENT_SECRET). Offers are created
 // and then paused straight away; images are added by hand on the site before resuming.
-
-// ---------- Accounts file (ACCOUNTS_FILE in .env) ----------
-// The list only carries emails; a password and key leave the server only when that account is picked.
-
-app.get('/accounts', async (req, res) => {
-  try {
-    const data = await accounts.readAccounts();
-    if (!data) return res.json({ configured: false, accounts: [] });
-    res.json({ configured: true, file: data.name, accounts: data.accounts.map((a, id) => ({ id, email: a.email })) });
-  } catch (err) {
-    res.status(500).json({ configured: true, error: err.message });
-  }
-});
-
-// ?file= is the name the list came from, so a newer export appearing in between can't
-// hand back a different account under the same id.
-app.get('/accounts/:id', async (req, res) => {
-  try {
-    const data = await accounts.readAccounts();
-    if (!data) return res.status(404).json({ error: 'No accounts file found. Reload the list.' });
-    if (req.query.file && req.query.file !== data.name) {
-      return res.status(409).json({ error: 'The accounts file changed. Reload the list and pick again.' });
-    }
-    const entry = data.accounts[Number(req.params.id)];
-    if (!entry) return res.status(404).json({ error: 'That account is no longer in the file. Reload the list.' });
-    res.set('Cache-Control', 'no-store').json(entry);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // ---------- Account folders (ACCOUNTS_DIR in .env) ----------
 

@@ -7,9 +7,36 @@
 
 const fs = require('fs/promises');
 const path = require('path');
-const { parseText, findTxt } = require('./accounts');
 
 const LISTED_DIR = 'Listed';
+const TXT = /\.txt$/i;
+
+// email = before the first ":", key = after the last ":", password = everything in between,
+// so a password containing ":" still parses. Blank or malformed lines are skipped.
+function parseLine(line) {
+  const text = line.trim();
+  const first = text.indexOf(':');
+  const last = text.lastIndexOf(':');
+  if (first <= 0 || last <= first) return null;
+  const email = text.slice(0, first).trim();
+  const password = text.slice(first + 1, last);
+  const key = text.slice(last + 1).trim();
+  if (!email || !password) return null;
+  return { email, password, key };
+}
+
+// The .txt file directly inside dir (newest if there are several), or null.
+async function findTxt(dir) {
+  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+  const files = await Promise.all(entries
+    .filter((e) => e.isFile() && TXT.test(e.name))
+    .map(async (e) => {
+      const file = path.join(dir, e.name);
+      return { file, mtime: (await fs.stat(file)).mtimeMs };
+    }));
+  files.sort((a, b) => b.mtime - a.mtime);
+  return files.length ? files[0].file : null;
+}
 const IMAGE_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 const SUFFIX_TYPES = { hcim: 'hcim', hc: 'hcim', uim: 'uim', im: 'ironman', iron: 'ironman', ironman: 'ironman', main: 'main' };
 const BAN_TAGS = ['temp'];
@@ -75,7 +102,7 @@ async function folderFiles(name) {
   const files = entries.filter((e) => e.isFile()).map((e) => e.name);
   return {
     images: files.filter((f) => IMAGE_TYPES[path.extname(f).toLowerCase()]).sort(byName),
-    hasLogin: files.some((f) => /\.txt$/i.test(f))
+    hasLogin: files.some((f) => TXT.test(f))
   };
 }
 
@@ -95,7 +122,8 @@ async function readImage(name, file) {
 async function readLogin(name) {
   const file = await findTxt(await resolveFolder(name));
   if (!file) return null;
-  return parseText(await fs.readFile(file, 'utf8'))[0] || null;
+  const text = (await fs.readFile(file, 'utf8')).replace(/^\uFEFF/, '');
+  return text.split(/\r?\n/).map(parseLine).find(Boolean) || null;
 }
 
 // Move a published account into ACCOUNTS_DIR\Listed, adding " (2)", " (3)"... if the name is taken.
@@ -111,4 +139,4 @@ async function moveToListed(name) {
   return path.relative(rootDir(), target);
 }
 
-module.exports = { isConfigured, listFolders, listImages, readImage, readLogin, moveToListed, parseFolderName };
+module.exports = { isConfigured, listFolders, listImages, readImage, readLogin, moveToListed, parseFolderName, parseLine };

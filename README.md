@@ -100,7 +100,7 @@ With Eldorado seller API credentials in `.env`, every generated listing opens st
    ELDORADO_CLIENT_SECRET=...
    ```
 3. Generate a listing; the panel appears with the title and description (both editable). Enter a **price**. Everything else is filled in from the listing: type, login method, and the exact total level, combat level, quest points and pet count (from the hiscores, the model's read of the screenshots, or combat worked out from visible skill levels), which set Eldorado's brackets. Typing an exact number updates its bracket. Fields outlined in amber are best guesses (Regular, 0-99 QP, 0 pets) because nothing in the listing said otherwise; red ones still need picking.
-4. To fill the login from a list instead, drop the accounts `.txt` (one `email:password:key` per line, any name, e.g. an EternalFarms export) into your `ACCOUNTS_DIR` main folder, or set `ACCOUNTS_FILE=C:\path\to\accounts.txt` in `.env`, and pick the email under **Account from file**; or use **Load file...** to read one in the browser for this session only. Picking an account fills **Account login** and **Account password**, and puts the key on the `2FA Secret Key:` line of both the additional info and the **Buyer handover message**. The page only ever gets the email list until you pick one; nothing is logged or saved.
+4. With account folders (see **Account folders** above), the login, password and 2FA key fill in from the folder's `.txt` file; the key also goes on the `2FA Secret Key:` line of the **Buyer handover message**. Otherwise type them in.
    Fill in the delivery details (account login and password, email, additional info) for **Instant** delivery: Eldorado treats Instant as automatic delivery and refuses it without them. To deliver by hand instead, leave them empty and pick a delivery time of 20 minutes or longer. They go straight to Eldorado, are never written to disk, and are wiped when the dialog closes. Additional info starts as the buyer handover message.
 5. The **Main image** is the listing card, built automatically from your screenshots (redacted ones as redacted) with the price on it. **Edit card** opens the card builder (**Use this card** hands it back); **Use a file instead** picks any image. Eldorado requires a main image.
 6. Click **Create offer (paused)**, check the offer on Eldorado (add more images if you like), then resume it there. Images go through the same upload endpoint Eldorado's own sell form uses; it is not part of the documented seller API, so if Eldorado changes it the panel shows the upload error. Clear or a new Generate wipes the delivery details.
@@ -115,7 +115,7 @@ The app only uses information visible in your screenshots or returned by the his
 - The local `.env` file contains only the proxy URL and the shared secret password.
 - `.env` is gitignored so it will never be committed. It may also hold the Eldorado seller API client ID and secret.
 - Eldorado delivery details typed into the publish panel are passed straight to Eldorado and never logged or stored.
-- The `ACCOUNTS_FILE` stays where you put it; the server reads it on request and never logs or copies it. `accounts*.txt` is gitignored in case it sits in the project folder.
+- Account folders stay where you put them; the server reads the screenshots and the `.txt` login file on request and never logs or copies them. `accounts*.txt` and `login*.txt` are gitignored in case one ends up in the project folder.
 - Uploaded screenshots are held in memory during the request and are not written to disk.
 
 ## Troubleshooting
@@ -135,7 +135,6 @@ osrs-listing-generator/
 ├── package.json
 ├── server.js              Express server: prompt, hiscores lookup, quadrant crops, footer, proxy call
 ├── eldorado.js            Eldorado seller API client: token cache, offer payload, create + pause
-├── accounts.js            Reads ACCOUNTS_FILE (email:password:key per line) for the delivery details
 ├── folders.js             ACCOUNTS_DIR account folders: name/type/ban from the folder name, screenshots, the .txt login file, move to Listed
 ├── data/
 │   └── eldorado-osrs.json OSRS account builds and required offer attributes on Eldorado
