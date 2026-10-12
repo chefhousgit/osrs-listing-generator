@@ -24,7 +24,10 @@
         <details id="folderMenu" class="folder-menu">
           <summary id="folderSummary">Pick accounts...</summary>
           <div class="folder-menu-body">
-            <button type="button" id="folderAll" class="link-btn">Select all / none</button>
+            <div class="folder-search-row">
+              <input type="search" id="folderSearch" class="folder-search" placeholder="Search accounts..." autocomplete="off" />
+              <button type="button" id="folderAll" class="link-btn">Select all / none</button>
+            </div>
             <div id="folderList" class="folder-list"></div>
           </div>
         </details>

@@ -841,6 +841,7 @@ const folderSummary = document.getElementById('folderSummary');
 const folderMenu = document.getElementById('folderMenu');
 const folderListEl = document.getElementById('folderList');
 const folderAll = document.getElementById('folderAll');
+const folderSearch = document.getElementById('folderSearch');
 const folderStart = document.getElementById('folderStart');
 const folderHint = document.getElementById('folderHint');
 const folderReload = document.getElementById('folderReload');
@@ -902,7 +903,17 @@ function renderFolderList() {
     label.append(cb, text);
     folderListEl.appendChild(label);
   });
+  filterFolders();
   updateFolderSummary();
+}
+
+// Search box: show only folders whose name contains the text (ticks are kept while hidden).
+function filterFolders() {
+  const q = folderSearch.value.trim().toLowerCase();
+  folderListEl.querySelectorAll('.folder-option').forEach((label) => {
+    const name = label.querySelector('input').value.toLowerCase();
+    label.classList.toggle('hidden', Boolean(q) && !name.includes(q));
+  });
 }
 
 function checkedFolders() {
@@ -917,8 +928,11 @@ function updateFolderSummary() {
 }
 
 folderListEl.addEventListener('change', updateFolderSummary);
+folderSearch.addEventListener('input', filterFolders);
+// Opening the menu puts the cursor in the search box.
+folderMenu.addEventListener('toggle', () => { if (folderMenu.open) folderSearch.focus(); });
 folderAll.addEventListener('click', () => {
-  const boxes = Array.from(folderListEl.querySelectorAll('input:not(:disabled)'));
+  const boxes = Array.from(folderListEl.querySelectorAll('.folder-option:not(.hidden) input:not(:disabled)'));
   const allOn = boxes.length && boxes.every((cb) => cb.checked);
   boxes.forEach((cb) => { cb.checked = !allOn; });
   updateFolderSummary();
@@ -930,6 +944,7 @@ folderStart.addEventListener('click', () => {
     if (folder && !queuedFolder(name)) jobs.push({ folder, status: 'waiting', snap: null, result: null, error: null, panelState: null });
   });
   folderMenu.open = false;
+  folderSearch.value = '';
   renderFolderList();
   renderQueue();
   // Nothing on the page yet: start on the first account.

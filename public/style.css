@@ -112,6 +112,34 @@ html, body {
   overflow-y: auto;
 }
 
+.folder-search-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.folder-search {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.folder-search:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+.folder-option input {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
 .folder-list {
   display: flex;
   flex-direction: column;
@@ -226,7 +254,7 @@ html, body {
   white-space: nowrap;
 }
 
-.username-row label {
+.username-row > label {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -235,7 +263,7 @@ html, body {
   color: var(--text);
 }
 
-.username-row label small {
+.username-row > label small {
   color: var(--text-dim);
   font-size: 0.78rem;
   font-weight: normal;
@@ -247,7 +275,7 @@ html, body {
   font-size: 0.85rem;
 }
 
-.username-row input {
+.username-row > input {
   flex: 0 1 220px;
   background: var(--bg-2);
   border: 1px solid var(--border);
@@ -257,7 +285,7 @@ html, body {
   font: inherit;
 }
 
-.username-row input:focus {
+.username-row > input:focus {
   outline: none;
   border-color: var(--gold);
 }
