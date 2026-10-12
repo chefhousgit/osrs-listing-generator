@@ -87,7 +87,10 @@
       const select = document.createElement('select');
       select.appendChild(option('', 'Pick...'));
       attr.values.forEach((v) => select.appendChild(option(v.id, v.name)));
-      select.addEventListener('change', () => markSelect(select, 'picked'));
+      select.addEventListener('change', () => {
+        markSelect(select, 'picked');
+        if (attr.id === 'osrs-account-type') queueAutoCard();
+      });
       attrsEl.appendChild(field(attr.name, select));
       attrSelects[attr.id] = select;
     });
@@ -97,6 +100,7 @@
       input.inputMode = 'numeric';
       input.placeholder = `${attr.min}-${attr.max}`;
       input.addEventListener('input', () => {
+        if (attr.id === 'osrs-total-level-numeric') queueAutoCard();
         const select = attrSelects[NUMERIC_TO_SELECT[attr.id]];
         const id = bracketFor(NUMERIC_TO_SELECT[attr.id], toNumber(input.value));
         if (select && id) {
@@ -227,10 +231,22 @@
     return {
       files: now.files,
       isRedacted: now.isRedacted,
-      title: ctx.title,
+      title: cardTitle(),
       loginMethod: ctx.loginMethod,
       price: priceInput.value.trim()
     };
+  }
+
+  // Card title from the panel: "<total> Total Level <type>", e.g. "1007 Total Level HCIM".
+  // Falls back to the generated title when neither is set.
+  const TYPE_SHORT = { regular: 'Main', ironman: 'Ironman', hcim: 'HCIM', uim: 'UIM', gim: 'GIM', hcgim: 'HCGIM', ugim: 'UGIM' };
+  function cardTitle() {
+    const totalInput = numInputs['osrs-total-level-numeric'];
+    const total = totalInput ? toNumber(totalInput.value) : null;
+    const typeSelect = attrSelects['osrs-account-type'];
+    const type = typeSelect ? TYPE_SHORT[typeSelect.value] || '' : '';
+    if (total) return (total + ' Total Level ' + type).trim();
+    return type || ctx.title;
   }
 
   // Build the default card (price included) unless the user edited it or picked a file.

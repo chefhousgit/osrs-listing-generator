@@ -87,7 +87,7 @@ ACCOUNTS_DIR=C:\Users\you\Desktop\Accounts
   - Examples: `Zezima`, `Zezima - hc`, `Zezima - hc - temp`.
 - **Inside each folder**: the screenshots (png / jpg / webp, loaded in file-name order) and one `.txt` file with an `email:password:key` line. Any name works (for example an EternalFarms `accounts-export-....txt`); the first valid line is used.
 - Picking a folder in **Account folder** clears the page, loads the screenshots (unredacted), sets the account name, type and ban history, and opens the card builder: hit **Redact** on the skills and overview screenshots, then **Done**, then Generate. Redacting before Generate means the model never sees the hidden skills. After Generate, the publish panel fills the login, password and 2FA key from that `.txt` file (the key also goes into the buyer handover message).
-- After a successful publish the folder is moved to `ACCOUNTS_DIR\Listed\` (with ` (2)` added if the name is taken), so the picker only shows accounts still to list. **Reload** re-reads the main folder.
+- After a successful publish the folder is moved to `ACCOUNTS_DIR\Listed\`, or to `LISTED_DIR` if you set one in `.env` (any folder, any drive; ` (2)` is added if the name is taken), so the picker only shows accounts still to list. **Reload** re-reads the main folder.
 
 ## Publishing to Eldorado (optional)
 
