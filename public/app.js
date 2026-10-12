@@ -765,6 +765,17 @@ handoverCopy.addEventListener('click', async () => {
   }
 });
 
+// Put a 2FA secret key on the "2FA Secret Key:" line of a message (added at the end if missing).
+window.withSecretKey = function (text, key) {
+  const line = /^2FA Secret Key:.*$/m;
+  return line.test(text) ? text.replace(line, '2FA Secret Key: ' + key) : text.replace(/\s*$/, '') + '\n2FA Secret Key: ' + key;
+};
+
+// Called by the Eldorado panel when an account is picked from the accounts file.
+window.setHandoverKey = function (key) {
+  handoverText.value = window.withSecretKey(handoverText.value, key);
+};
+
 // Snapshot of the current listing for the Eldorado publish dialog (eldorado.js).
 window.getListingContext = function () {
   if (!lastResult) return null;

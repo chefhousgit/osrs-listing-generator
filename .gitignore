@@ -8,3 +8,6 @@ Thumbs.db
 
 # Eldorado seller API spec (downloaded from a logged-in session)
 docs/eldorado-seller-swagger.json
+
+# Account credential files, in case one is kept in the project folder
+accounts*.txt

@@ -1334,6 +1334,21 @@ html, body {
   gap: 6px;
 }
 
+.eldorado-account-pick {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.eldorado-account-pick select {
+  flex: 1 1 auto;
+}
+
+.eldorado-account-pick button {
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
 .eldorado-section {
   margin: 6px 0 0;
   font-size: 0.95rem;

@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const sharp = require('sharp');
 const eldorado = require('./eldorado');
+const accounts = require('./accounts');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -722,6 +723,31 @@ Return ONLY the JSON object, no markdown fences, no preamble.`
 // ---------- Eldorado seller API ----------
 // Credentials live in .env (ELDORADO_CLIENT_ID / ELDORADO_CLIENT_SECRET). Offers are created
 // and then paused straight away; images are added by hand on the site before resuming.
+
+// ---------- Accounts file (ACCOUNTS_FILE in .env) ----------
+// The list only carries emails; a password and key leave the server only when that account is picked.
+
+app.get('/accounts', async (req, res) => {
+  if (!accounts.isConfigured()) return res.json({ configured: false, accounts: [] });
+  try {
+    const list = await accounts.readAccounts();
+    res.json({ configured: true, accounts: list.map((a, id) => ({ id, email: a.email })) });
+  } catch (err) {
+    res.status(500).json({ configured: true, error: err.message });
+  }
+});
+
+app.get('/accounts/:id', async (req, res) => {
+  if (!accounts.isConfigured()) return res.status(404).json({ error: 'ACCOUNTS_FILE is not set in .env.' });
+  try {
+    const list = await accounts.readAccounts();
+    const entry = list[Number(req.params.id)];
+    if (!entry) return res.status(404).json({ error: 'That account is no longer in the file. Reload the list.' });
+    res.set('Cache-Control', 'no-store').json(entry);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.get('/eldorado/config', (req, res) => {
   res.json({

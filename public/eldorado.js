@@ -24,6 +24,11 @@
   const pickFileBtn = document.getElementById('edPickFile');
   const autoCardBtn = document.getElementById('edAutoCard');
   const imageFileInput = document.getElementById('edImageFile');
+  const accountPick = document.getElementById('edAccountPick');
+  const accountHint = document.getElementById('edAccountHint');
+  const accountReloadBtn = document.getElementById('edAccountReload');
+  const accountFileBtn = document.getElementById('edAccountFileBtn');
+  const accountFileInput = document.getElementById('edAccountFileInput');
   const secretInputs = ['edAccountLogin', 'edAccountPassword', 'edEmailLogin', 'edEmailPassword', 'edEmailProvider']
     .map((id) => document.getElementById(id));
 
@@ -295,6 +300,10 @@
     clearTimeout(cardTimer);
     setMainImage(null);
     ctx = null;
+    accountPick.value = '';
+    // Don't carry the last account's key into the next listing's handover message.
+    if (keyFilled && window.setHandoverKey) window.setHandoverKey('');
+    keyFilled = false;
   }
 
   form.addEventListener('submit', async (e) => {
@@ -352,6 +361,88 @@
     }
   });
 
+  // ---------- accounts file ----------
+  // Source is ACCOUNTS_FILE on the server (list = emails only; one account fetched when picked),
+  // or a file loaded in the browser with Load file..., kept in memory for this page only.
+  let localAccounts = null; // [{ email, password, key }] from Load file...
+  let keyFilled = false;    // the handover message got a key from here
+
+  function parseAccountLine(line) {
+    const text = line.trim();
+    const first = text.indexOf(':');
+    const last = text.lastIndexOf(':');
+    if (first <= 0 || last <= first) return null;
+    const email = text.slice(0, first).trim();
+    const password = text.slice(first + 1, last);
+    if (!email || !password) return null;
+    return { email, password, key: text.slice(last + 1).trim() };
+  }
+
+  function listAccounts(emails, source) {
+    accountPick.innerHTML = '';
+    accountPick.appendChild(option('', emails.length ? 'Pick an account...' : 'No accounts found'));
+    emails.forEach((email, id) => accountPick.appendChild(option(String(id), email)));
+    accountHint.textContent = emails.length ? `(${emails.length} from ${source})` : '(email:password:key, one per line)';
+  }
+
+  async function loadServerAccounts() {
+    localAccounts = null;
+    try {
+      const data = await fetch('/accounts').then((r) => r.json());
+      if (!data.configured) {
+        listAccounts([], '');
+        accountHint.textContent = '(set ACCOUNTS_FILE in .env, or use Load file...)';
+        accountReloadBtn.classList.add('hidden');
+        return;
+      }
+      accountReloadBtn.classList.remove('hidden');
+      if (data.error) {
+        listAccounts([], '');
+        accountHint.textContent = '(' + data.error + ')';
+        return;
+      }
+      listAccounts(data.accounts.map((a) => a.email), 'ACCOUNTS_FILE');
+    } catch (e) {
+      accountHint.textContent = '(could not load the accounts list)';
+    }
+  }
+
+  function applyAccount(acc) {
+    const [loginInput, passwordInput] = secretInputs;
+    loginInput.value = acc.email;
+    passwordInput.value = acc.password;
+    if (acc.key) {
+      additionalInput.value = window.withSecretKey(additionalInput.value, acc.key);
+      if (window.setHandoverKey) window.setHandoverKey(acc.key);
+      keyFilled = true;
+    }
+  }
+
+  accountPick.addEventListener('change', async () => {
+    const id = accountPick.value;
+    if (id === '') return;
+    if (localAccounts) {
+      applyAccount(localAccounts[Number(id)]);
+      return;
+    }
+    const res = await fetch('/accounts/' + encodeURIComponent(id), { cache: 'no-store' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setNote(data.error || 'Could not read that account.', 'error');
+      return;
+    }
+    applyAccount(data);
+  });
+  accountReloadBtn.addEventListener('click', loadServerAccounts);
+  accountFileBtn.addEventListener('click', () => accountFileInput.click());
+  accountFileInput.addEventListener('change', async () => {
+    const file = accountFileInput.files[0];
+    accountFileInput.value = '';
+    if (!file) return;
+    localAccounts = (await file.text()).replace(/^\uFEFF/, '').split(/\r?\n/).map(parseAccountLine).filter(Boolean);
+    listAccounts(localAccounts.map((a) => a.email), file.name);
+  });
+
   window.fillEldoradoPanel = fill;
   window.resetEldoradoPanel = reset;
 
@@ -364,6 +455,7 @@
       // The panel's title/description replace the plain listing card.
       panel.classList.remove('hidden');
       versionsGrid.classList.add('hidden');
+      loadServerAccounts();
       if (window.getListingContext && window.getListingContext()) fill();
     })
     .catch(() => {});
