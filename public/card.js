@@ -322,17 +322,29 @@
       thumb.src = e.url;
       thumb.alt = 'Screenshot ' + (idx + 1);
       const cap = document.createElement('span');
-      cap.textContent = (idx + 1) + '. ' + (e.redacted ? 'Redacted' : 'Not redacted');
+      cap.textContent = (idx + 1) + '. ' + (e.redacted ? (e.preRedacted ? 'Already redacted' : 'Redacted') : 'Not redacted');
       if (!e.redacted) {
         // Never on the card as-is: redact first.
+        const actions = document.createElement('div');
+        actions.className = 'card-redact-actions';
         if (onRedact) {
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'secondary-btn card-redact-btn';
           btn.textContent = 'Redact';
           btn.addEventListener('click', (ev) => { ev.preventDefault(); onRedact(e.file); });
-          label.appendChild(btn);
+          actions.appendChild(btn);
         }
+        if (onMarkRedacted) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'secondary-btn card-redact-btn';
+          btn.textContent = 'Already redacted';
+          btn.title = 'This screenshot was redacted before it got here: put it on the card as it is';
+          btn.addEventListener('click', (ev) => { ev.preventDefault(); onMarkRedacted(e.file); });
+          actions.appendChild(btn);
+        }
+        if (actions.childElementCount) label.appendChild(actions);
         label.appendChild(thumb);
         label.appendChild(cap);
         imagePicker.appendChild(label);
@@ -375,7 +387,9 @@
 
   let onUse = null;     // set when opened from the Eldorado panel: Save hands the card back instead
   let onRedact = null;  // (file) => opens the redact tool for an unredacted screenshot
+  let onMarkRedacted = null; // (file) => marks a screenshot redacted before it reached the app
   let prepMode = false; // opened right after loading an account folder: the button just says Done
+  let onDone = null;    // prep mode: called after Done closes the builder (queue: generate & next)
   let lastOpts = null;  // open options, reused when the screenshots change
 
   // Load screenshots and fill the inputs with the defaults (remembered prefs + auto tags).
@@ -383,7 +397,7 @@
     const loaded = await Promise.all(files.map(async (file) => {
       const url = URL.createObjectURL(file);
       const img = await loadImage(url);
-      return { file, img, url, redacted: !!isRedacted(file), checked: false };
+      return { file, img, url, redacted: !!isRedacted(file), preRedacted: !!(lastOpts && lastOpts.isPreRedacted && lastOpts.isPreRedacted(file)), checked: false };
     }));
     releaseEntries();
     entries = loaded;
@@ -414,8 +428,10 @@
     lastOpts = opts;
     onUse = typeof opts.onUse === 'function' ? opts.onUse : null;
     onRedact = typeof opts.onRedact === 'function' ? opts.onRedact : null;
+    onMarkRedacted = typeof opts.onMarkRedacted === 'function' ? opts.onMarkRedacted : null;
     prepMode = Boolean(opts.prep);
-    saveBtn.textContent = prepMode ? 'Done' : onUse ? 'Use this card' : 'Save image';
+    onDone = prepMode && typeof opts.onDone === 'function' ? opts.onDone : null;
+    saveBtn.textContent = prepMode ? opts.doneLabel || 'Done' : onUse ? 'Use this card' : 'Save image';
     modal.classList.remove('hidden');
     noteEl.textContent = 'Loading...';
     await prepare(opts);
@@ -452,7 +468,9 @@
     releaseEntries();
     onUse = null;
     onRedact = null;
+    onMarkRedacted = null;
     prepMode = false;
+    onDone = null;
     lastOpts = null;
   }
 
@@ -476,7 +494,9 @@
 
   saveBtn.addEventListener('click', () => {
     if (prepMode) {
+      const done = onDone;
       close();
+      if (done) done();
       return;
     }
     canvas.toBlob((blob) => {

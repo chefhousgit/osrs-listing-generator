@@ -16,16 +16,33 @@
 
   <main class="container">
     <section id="folderRow" class="username-row folder-row hidden">
-      <label for="folderPick">
-        <span>Account folder</span>
-        <small id="folderHint">Loads the folder's screenshots, account name, type and login (.txt) file.</small>
+      <label>
+        <span>Account folders</span>
+        <small id="folderHint">Tick the accounts to list and press Start.</small>
       </label>
       <div class="folder-pick">
-        <select id="folderPick">
-          <option value="">Pick an account folder...</option>
-        </select>
+        <details id="folderMenu" class="folder-menu">
+          <summary id="folderSummary">Pick accounts...</summary>
+          <div class="folder-menu-body">
+            <button type="button" id="folderAll" class="link-btn">Select all / none</button>
+            <div id="folderList" class="folder-list"></div>
+          </div>
+        </details>
+        <button type="button" id="folderStart" class="primary-btn" disabled>Start</button>
         <button type="button" id="folderReload" class="secondary-btn">Reload</button>
       </div>
+    </section>
+
+    <section id="queueBar" class="queue-bar hidden" aria-live="polite">
+      <div class="queue-head">
+        <strong id="queueText"></strong>
+        <div class="queue-actions">
+          <button type="button" id="queueNext" class="secondary-btn hidden">Next account</button>
+          <button type="button" id="queueTidy" class="secondary-btn hidden">Clear published</button>
+        </div>
+      </div>
+      <div id="queueProgress" class="queue-progress"></div>
+      <div id="queueChips" class="queue-chips"></div>
     </section>
 
     <section class="username-row">
@@ -165,7 +182,11 @@
               </div>
             </div>
           </div>
-          <div id="edAttributes" class="eldorado-attrs"></div>
+          <div class="card-field">
+          <span>More images <small id="edExtrasHint">(uploaded after the card, never on it)</small></span>
+          <div id="edExtras" class="card-picker eldorado-extras"></div>
+        </div>
+        <div id="edAttributes" class="eldorado-attrs"></div>
           <div id="edNumeric" class="eldorado-attrs eldorado-numeric"></div>
 
           <h3 class="eldorado-section">Delivery details <small>(sent to Eldorado for instant delivery, never saved here)</small> <small id="edAccountHint"></small></h3>

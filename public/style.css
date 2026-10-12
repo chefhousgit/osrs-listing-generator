@@ -71,16 +71,156 @@ html, body {
   min-width: 0;
 }
 
-.folder-pick select {
+.folder-menu {
   flex: 1 1 auto;
   min-width: 0;
+  position: relative;
+}
+
+.folder-menu summary {
+  list-style: none;
+  cursor: pointer;
   background: var(--bg-2);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px 10px;
-  font: inherit;
 }
+
+.folder-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.folder-menu summary::after {
+  content: '\25BE';
+  float: right;
+  color: var(--text-dim);
+}
+
+.folder-menu-body {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  padding: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+  font-size: 0.9rem;
+}
+
+.folder-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.folder-option:hover {
+  background: var(--panel-2);
+}
+
+.folder-option input:disabled + span {
+  color: var(--text-dim);
+}
+
+/* ---------- Account queue ---------- */
+.queue-bar {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.queue-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.queue-head strong {
+  color: var(--gold);
+  font-size: 0.95rem;
+}
+
+.queue-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.queue-progress {
+  display: flex;
+  gap: 3px;
+  height: 10px;
+}
+
+.queue-seg {
+  flex: 1 1 0;
+  border-radius: 3px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+
+.queue-seg.redacting { background: var(--accent); }
+.queue-seg.generating { background: var(--gold-dim); animation: queue-pulse 1.2s ease-in-out infinite; }
+.queue-seg.ready { background: var(--gold); }
+.queue-seg.published { background: var(--success); }
+.queue-seg.error { background: var(--danger); }
+.queue-seg.current { outline: 2px solid var(--text); outline-offset: 1px; }
+
+@keyframes queue-pulse {
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .queue-seg.generating { animation: none; }
+}
+
+.queue-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.queue-chip {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.queue-chip:disabled {
+  cursor: default;
+}
+
+.queue-chip.ready { color: #1a1410; background: var(--gold); border-color: var(--gold-dim); font-weight: 600; }
+.queue-chip.redacting { color: var(--text); border-color: var(--accent); }
+.queue-chip.published { color: var(--success); border-color: var(--success); }
+.queue-chip.error { color: var(--danger); border-color: var(--danger); }
+.queue-chip.current { box-shadow: 0 0 0 2px var(--text); }
 
 .folder-pick button {
   white-space: nowrap;
@@ -1221,14 +1361,22 @@ html, body {
   opacity: 0.45;
 }
 
-.card-redact-btn {
+.card-redact-actions {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -70%);
   z-index: 1;
-  padding: 4px 10px;
-  font-size: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 85%;
+}
+
+.card-redact-btn {
+  padding: 4px 6px;
+  font-size: 0.72rem;
+  white-space: nowrap;
 }
 
 /* The redact tool can be opened from the card builder, so it sits above it. */
@@ -1373,6 +1521,10 @@ html, body {
   border-radius: 6px;
   background: var(--bg-2);
   object-fit: contain;
+}
+
+.eldorado-extras {
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
 }
 
 .eldorado-image-actions {

@@ -268,16 +268,33 @@ function redactFile(file) {
 }
 window.redactFile = redactFile;
 
+// Mark a screenshot that was redacted before it reached the app (nothing hidden by us), so it
+// can go on the card. Redacting it here afterwards works as normal. Top-level, so also
+// window.markRedacted for the Eldorado panel.
+const PRE_REDACTED_NAME = /redact/i;
+function markRedacted(file) {
+  if (!selectedFiles.includes(file) || redactions.has(file)) return;
+  redactions.set(file, { original: file, state: { grid: null, skills: [], boxes: [] }, preRedacted: true });
+  refreshPreviews();
+  if (window.cardFilesChanged) window.cardFilesChanged(selectedFiles.slice());
+  if (window.refreshEldoradoCard) window.refreshEldoradoCard();
+}
+
 // Card builder right after an account folder loads: redact the skills and overview screenshots
 // here, before Generate, so the model never sees hidden skills. Only redacted shots go on a card.
+// From the queue, Done also starts this account generating and loads the next one.
 function openCardForRedaction() {
+  const more = jobs.some((j) => j.status === 'waiting');
   window.openCardTool({
     files: selectedFiles.slice(),
     isRedacted: (file) => redactions.has(file),
     title: '',
     loginMethod,
     onRedact: redactFile,
-    prep: true
+    onMarkRedacted: markRedacted,
+    prep: true,
+    doneLabel: currentJob ? (more ? 'Done, generate & next' : 'Done & generate') : 'Done',
+    onDone: currentJob ? generateJobAndNext : null
   });
 }
 
@@ -323,7 +340,7 @@ function refreshPreviews() {
     if (redactions.has(file)) {
       const badge = document.createElement('span');
       badge.className = 'preview-badge';
-      badge.textContent = 'Redacted';
+      badge.textContent = redactions.get(file).preRedacted ? 'Already redacted' : 'Redacted';
       wrap.appendChild(badge);
     }
     wrap.appendChild(removeBtn);
@@ -376,21 +393,16 @@ cardBtn.addEventListener('click', () => {
     isRedacted: (file) => redactions.has(file),
     title: resultsSection.classList.contains('hidden') ? '' : (titleEl && titleEl.textContent) || '',
     loginMethod,
-    onRedact: redactFile
+    onRedact: redactFile,
+    onMarkRedacted: markRedacted
   });
 });
 
+// Clear empties the page; a queued account on it goes back to Waiting (redactions dropped).
 clearBtn.addEventListener('click', () => {
-  if (window.resetEldoradoPanel) window.resetEldoradoPanel();
-  currentFolder = null;
-  folderPick.value = '';
-  selectedFiles = [];
-  redactions.clear();
-  refreshPreviews();
-  resultsSection.classList.add('hidden');
-  statusBox.classList.add('hidden');
-  statusBox.innerHTML = '';
-  clearCards();
+  leaveCurrentJob(false);
+  clearWorkspace();
+  renderQueue();
 });
 
 function showStatus(kind, message) {
@@ -684,47 +696,73 @@ function makeBadge(text) {
   return b;
 }
 
+// Everything Generate sends, captured from the page right now. Queued accounts keep their own
+// copy, so changing pills, gear or emojis for the next account doesn't touch one already running.
+function snapshotWorkspace() {
+  return {
+    files: selectedFiles.slice(),
+    redactions: new Map(redactions),
+    username: usernameInput.value.trim(),
+    accountType,
+    loginMethod,
+    banHistory,
+    titleEmojis,
+    descEmojis,
+    selectedItems: getSelectedItems(),
+    titleItems: getTitleItems()
+  };
+}
+
+function generateForm(snap) {
+  const formData = new FormData();
+  snap.files.forEach((f) => formData.append('images', f));
+  if (snap.username) formData.append('username', snap.username);
+  if (snap.selectedItems.length > 0) formData.append('selectedItems', JSON.stringify(snap.selectedItems));
+  if (snap.titleItems.length > 0) formData.append('titleItems', JSON.stringify(snap.titleItems));
+  formData.append('titleEmojis', snap.titleEmojis ? 'true' : 'false');
+  formData.append('descEmojis', snap.descEmojis ? 'true' : 'false');
+  formData.append('accountType', snap.accountType);
+  formData.append('loginMethod', snap.loginMethod);
+  formData.append('cleanAccount', snap.banHistory === 'clean' ? 'true' : 'false');
+  const hidden = new Set();
+  snap.redactions.forEach((r) => r.state.skills.forEach((sk) => hidden.add(sk)));
+  if (hidden.size > 0) formData.append('hiddenSkills', JSON.stringify(Array.from(hidden)));
+  return formData;
+}
+
+// POST /generate; resolves to the listing data or throws with the server's message.
+async function requestListing(snap) {
+  let res;
+  try {
+    res = await fetch('/generate', { method: 'POST', body: generateForm(snap) });
+  } catch (err) {
+    throw new Error('Network error: ' + err.message);
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ('Request failed with status ' + res.status));
+  return data;
+}
+
 generateBtn.addEventListener('click', async () => {
   if (selectedFiles.length === 0) {
     showStatus('error', 'Upload at least one screenshot first.');
+    return;
+  }
+  // An account from the queue: generate in the background and move on to the next one.
+  if (currentJob) {
+    generateJobAndNext();
     return;
   }
 
   generateBtn.disabled = true;
   resultsSection.classList.add('hidden');
   showStatus('loading', 'Analyzing screenshots and generating listings...');
-
-  const formData = new FormData();
-  selectedFiles.forEach((f) => formData.append('images', f));
-  const username = usernameInput.value.trim();
-  if (username) formData.append('username', username);
-  const selectedItems = getSelectedItems();
-  if (selectedItems.length > 0) formData.append('selectedItems', JSON.stringify(selectedItems));
-  const titleItems = getTitleItems();
-  if (titleItems.length > 0) formData.append('titleItems', JSON.stringify(titleItems));
-  formData.append('titleEmojis', titleEmojis ? 'true' : 'false');
-  formData.append('descEmojis', descEmojis ? 'true' : 'false');
-  formData.append('accountType', accountType);
-  formData.append('loginMethod', loginMethod);
-  formData.append('cleanAccount', banHistory === 'clean' ? 'true' : 'false');
-  const hiddenSkills = getHiddenSkills();
-  if (hiddenSkills.length > 0) formData.append('hiddenSkills', JSON.stringify(hiddenSkills));
-
   try {
-    const res = await fetch('/generate', { method: 'POST', body: formData });
-    const data = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      const msg = data.error || ('Request failed with status ' + res.status);
-      showStatus('error', msg);
-      generateBtn.disabled = false;
-      return;
-    }
-
+    const data = await requestListing(snapshotWorkspace());
     hideStatus();
     renderResults(data);
   } catch (err) {
-    showStatus('error', 'Network error: ' + err.message);
+    showStatus('error', err.message);
   } finally {
     generateBtn.disabled = false;
   }
@@ -791,21 +829,44 @@ handoverCopy.addEventListener('click', async () => {
   }
 });
 
-// ---------- Account folders (ACCOUNTS_DIR) ----------
-// Picking a folder starts a fresh listing: its screenshots, the RSN and type/ban from the folder
-// name ("Zezima - hc - temp"). The Eldorado panel reads the folder's .txt login file and, after a
-// publish, the server moves the folder to Listed.
+// ---------- Account folders + queue (ACCOUNTS_DIR) ----------
+// Tick account folders and Start: they go into a queue and load one at a time. Each account opens
+// with its screenshots, the RSN and type/ban from the folder name ("Zezima - hc - temp") and the
+// card builder for redacting. "Done, generate & next" (or Generate) starts that account's listing in
+// the background from a snapshot of the page and loads the next account straight away. Ready
+// accounts open from the queue bar with their results and publish panel (edits kept per account);
+// publishing moves the folder to Listed on the server.
 const folderRow = document.getElementById('folderRow');
-const folderPick = document.getElementById('folderPick');
+const folderSummary = document.getElementById('folderSummary');
+const folderMenu = document.getElementById('folderMenu');
+const folderListEl = document.getElementById('folderList');
+const folderAll = document.getElementById('folderAll');
+const folderStart = document.getElementById('folderStart');
 const folderHint = document.getElementById('folderHint');
 const folderReload = document.getElementById('folderReload');
-let currentFolder = null;
+const queueBar = document.getElementById('queueBar');
+const queueText = document.getElementById('queueText');
+const queueProgress = document.getElementById('queueProgress');
+const queueChips = document.getElementById('queueChips');
+const queueNext = document.getElementById('queueNext');
+const queueTidy = document.getElementById('queueTidy');
+
+let currentFolder = null; // folder name of the account on the page (publish moves it)
+let currentJob = null;    // queue entry on the page
 let folderList = [];
+const jobs = [];          // { folder, status, snap, result, error, panelState }
+const STATUS_LABELS = {
+  waiting: 'Waiting', redacting: 'Redacting', generating: 'Generating...',
+  ready: 'Ready', error: 'Error', published: 'Published'
+};
+const DEFAULT_HINT = 'Tick the accounts to list and press Start. Each loads with its screenshots, name, type and login file.';
 
 function setPill(groupId, value) {
   const btn = document.querySelector(`#${groupId} .pill[data-value="${value}"]`);
   if (btn) btn.click();
 }
+
+const queuedFolder = (name) => jobs.some((j) => j.folder.name === name && j.status !== 'published');
 
 async function loadFolders() {
   try {
@@ -813,63 +874,275 @@ async function loadFolders() {
     if (!data.configured) return;
     folderRow.classList.remove('hidden');
     folderList = data.folders || [];
-    const keep = currentFolder;
-    folderPick.innerHTML = '';
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = data.error ? 'Could not read ACCOUNTS_DIR' : (folderList.length ? 'Pick an account folder...' : 'No account folders left to list');
-    folderPick.appendChild(placeholder);
-    folderList.forEach((f) => {
-      const o = document.createElement('option');
-      o.value = f.name;
-      o.textContent = `${f.name}  (${f.images} img${f.hasLogin ? '' : ', no login file'})`;
-      folderPick.appendChild(o);
-    });
-    folderPick.value = folderList.some((f) => f.name === keep) ? keep : '';
-    folderHint.textContent = data.error || 'Loads the folder\'s screenshots, account name, type and login (.txt) file.';
+    renderFolderList();
+    if (data.error) folderHint.textContent = data.error;
+    else if (!jobs.length) folderHint.textContent = DEFAULT_HINT;
   } catch (e) {
     folderHint.textContent = 'Could not load the account folders.';
   }
 }
 
-folderPick.addEventListener('change', async () => {
-  const name = folderPick.value;
-  if (!name) return;
-  const folder = folderList.find((f) => f.name === name);
-  clearBtn.click();
-  folderPick.value = name;
-  currentFolder = name;
+function renderFolderList() {
+  const ticked = new Set(checkedFolders());
+  folderListEl.innerHTML = '';
+  if (!folderList.length) {
+    folderListEl.textContent = 'No account folders left to list.';
+  }
+  folderList.forEach((f) => {
+    const label = document.createElement('label');
+    label.className = 'folder-option';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = f.name;
+    const queued = queuedFolder(f.name);
+    cb.disabled = queued;
+    cb.checked = !queued && ticked.has(f.name);
+    const text = document.createElement('span');
+    text.textContent = `${f.name}  (${f.images} img${f.hasLogin ? '' : ', no login file'}${queued ? ', in queue' : ''})`;
+    label.append(cb, text);
+    folderListEl.appendChild(label);
+  });
+  updateFolderSummary();
+}
+
+function checkedFolders() {
+  return Array.from(folderListEl.querySelectorAll('input:checked')).map((cb) => cb.value);
+}
+
+function updateFolderSummary() {
+  const n = checkedFolders().length;
+  folderSummary.textContent = n ? `${n} account${n === 1 ? '' : 's'} ticked` : 'Pick accounts...';
+  folderStart.textContent = n ? `Start (${n})` : 'Start';
+  folderStart.disabled = !n;
+}
+
+folderListEl.addEventListener('change', updateFolderSummary);
+folderAll.addEventListener('click', () => {
+  const boxes = Array.from(folderListEl.querySelectorAll('input:not(:disabled)'));
+  const allOn = boxes.length && boxes.every((cb) => cb.checked);
+  boxes.forEach((cb) => { cb.checked = !allOn; });
+  updateFolderSummary();
+});
+folderStart.addEventListener('click', () => {
+  const names = checkedFolders();
+  names.forEach((name) => {
+    const folder = folderList.find((f) => f.name === name);
+    if (folder && !queuedFolder(name)) jobs.push({ folder, status: 'waiting', snap: null, result: null, error: null, panelState: null });
+  });
+  folderMenu.open = false;
+  renderFolderList();
+  renderQueue();
+  // Nothing on the page yet: start on the first account.
+  if (!currentJob && selectedFiles.length === 0 && resultsSection.classList.contains('hidden')) loadNextJob();
+});
+folderReload.addEventListener('click', loadFolders);
+
+// Put a snapshot back on the page (screenshots, redactions, name, pills, emojis).
+function restoreWorkspace(snap) {
+  selectedFiles = snap.files.slice();
+  redactions.clear();
+  snap.redactions.forEach((v, k) => redactions.set(k, v));
+  refreshPreviews();
+  usernameInput.value = snap.username;
+  usernameInput.dispatchEvent(new Event('input'));
+  setPill('accountTypeGroup', snap.accountType);
+  setPill('loginMethodGroup', snap.loginMethod);
+  setPill('banHistoryGroup', snap.banHistory);
+  if (titleEmojis !== snap.titleEmojis) titleEmojiToggle.click();
+  if (descEmojis !== snap.descEmojis) descEmojiToggle.click();
+}
+
+// Empty the page (the queue itself is untouched).
+function clearWorkspace() {
+  if (window.resetEldoradoPanel) window.resetEldoradoPanel();
+  selectedFiles = [];
+  redactions.clear();
+  refreshPreviews();
+  resultsSection.classList.add('hidden');
+  statusBox.classList.add('hidden');
+  statusBox.innerHTML = '';
+  clearCards();
+}
+
+// Take the current account off the page. keep=true remembers half-done redactions and panel edits.
+function leaveCurrentJob(keep) {
+  const job = currentJob;
+  currentJob = null;
+  currentFolder = null;
+  if (!job) return;
+  if (job.status === 'redacting') {
+    job.snap = keep ? snapshotWorkspace() : null;
+    job.status = 'waiting';
+  } else if (job.status === 'ready' && keep && window.getEldoradoPanelState && !resultsSection.classList.contains('hidden')) {
+    job.panelState = window.getEldoradoPanelState();
+  }
+}
+
+async function fetchFolderFiles(name) {
+  const base = '/folders/' + encodeURIComponent(name) + '/images';
+  const { images, error } = await fetch(base).then((r) => r.json());
+  if (error) throw new Error(error);
+  return Promise.all(images.map(async (file) => {
+    const blob = await fetch(base + '/' + encodeURIComponent(file)).then((r) => r.blob());
+    return new File([blob], file, { type: blob.type });
+  }));
+}
+
+function folderSummaryText(folder, count) {
+  const typeText = folder.type === 'auto' ? 'type: Auto' : 'type: ' + folder.type.toUpperCase();
+  return `${folder.rsn}: ${count} screenshot${count === 1 ? '' : 's'}, ${typeText}${folder.tempBan ? ', had a temp ban' : ''}${folder.hasLogin ? ', login file found' : ', no login file'}.`;
+}
+
+async function loadJob(job) {
+  if (job === currentJob) return;
+  leaveCurrentJob(true);
+  clearWorkspace();
+  currentJob = job;
+  currentFolder = job.folder.name;
+  const folder = job.folder;
+
+  if (job.status === 'ready') {
+    restoreWorkspace(job.snap);
+    renderQueue();
+    renderResults(job.result);
+    if (job.panelState && window.setEldoradoPanelState) window.setEldoradoPanelState(job.panelState);
+    folderHint.textContent = `${folder.rsn}: ready. Check the listing below and create the offer.`;
+    return;
+  }
+
+  // Waiting, or an error being retried: redact (again) and generate.
+  const retry = job.status === 'error';
+  job.status = 'redacting';
+  renderQueue();
+  if (job.snap) {
+    restoreWorkspace(job.snap);
+    folderHint.textContent = retry
+      ? `${folder.rsn}: generating failed (${job.error}). Press Generate to try again.`
+      : folderSummaryText(folder, job.snap.files.length);
+    if (!retry) openCardForRedaction();
+    return;
+  }
 
   usernameInput.value = folder.rsn.slice(0, 12);
   usernameInput.dispatchEvent(new Event('input'));
   setPill('accountTypeGroup', folder.type);
   setPill('banHistoryGroup', folder.tempBan ? 'banned' : 'clean');
-
-  folderHint.textContent = 'Loading screenshots...';
+  folderHint.textContent = `${folder.rsn}: loading screenshots...`;
   try {
-    const base = '/folders/' + encodeURIComponent(name) + '/images';
-    const { images, error } = await fetch(base).then((r) => r.json());
-    if (error) throw new Error(error);
-    const files = await Promise.all(images.map(async (file) => {
-      const blob = await fetch(base + '/' + encodeURIComponent(file)).then((r) => r.blob());
-      return new File([blob], file, { type: blob.type });
-    }));
-    if (currentFolder !== name) return; // picked another folder meanwhile
+    const files = await fetchFolderFiles(folder.name);
+    if (currentJob !== job) return; // moved on meanwhile
     addFiles(files);
-    const typeText = folder.type === 'auto' ? 'type: Auto' : 'type: ' + folder.type.toUpperCase();
-    folderHint.textContent = `${files.length} screenshot${files.length === 1 ? '' : 's'}, ${typeText}${folder.tempBan ? ', had a temp ban' : ''}${folder.hasLogin ? ', login file found' : ', no login file'}.`;
+    files.filter((f) => PRE_REDACTED_NAME.test(f.name)).forEach((f) => {
+      redactions.set(f, { original: f, state: { grid: null, skills: [], boxes: [] }, preRedacted: true });
+    });
+    refreshPreviews();
+    folderHint.textContent = folderSummaryText(folder, files.length);
     if (files.length) openCardForRedaction();
   } catch (e) {
-    folderHint.textContent = 'Could not load the screenshots: ' + e.message;
+    folderHint.textContent = `${folder.rsn}: could not load the screenshots: ${e.message}`;
   }
+}
+
+function loadNextJob() {
+  const next = jobs.find((j) => j.status === 'waiting');
+  if (next) {
+    loadJob(next);
+    return true;
+  }
+  return false;
+}
+
+// Start the account on the page generating in the background, then load the next one.
+function generateJobAndNext() {
+  const job = currentJob;
+  if (!job) return;
+  job.snap = snapshotWorkspace();
+  job.status = 'generating';
+  job.result = null;
+  job.error = null;
+  job.panelState = null;
+  currentJob = null;
+  currentFolder = null;
+  runJob(job);
+  clearWorkspace();
+  if (!loadNextJob()) {
+    folderHint.textContent = 'Every queued account is generating or done. Open one from the queue when it shows Ready.';
+  }
+  renderQueue();
+}
+
+async function runJob(job) {
+  try {
+    job.result = await requestListing(job.snap);
+    job.status = 'ready';
+  } catch (err) {
+    job.error = err.message;
+    job.status = 'error';
+  }
+  renderQueue();
+}
+
+function renderQueue() {
+  queueBar.classList.toggle('hidden', jobs.length === 0);
+  generateBtn.textContent = currentJob && currentJob.status === 'redacting'
+    ? (jobs.some((j) => j.status === 'waiting') ? 'Generate & next' : 'Generate')
+    : 'Generate Listings';
+  if (!jobs.length) return;
+
+  const count = (status) => jobs.filter((j) => j.status === status).length;
+  const parts = [];
+  [['generating', 'generating'], ['ready', 'ready'], ['published', 'published'], ['error', 'failed'], ['waiting', 'waiting']]
+    .forEach(([status, word]) => { const n = count(status); if (n) parts.push(`${n} ${word}`); });
+  const pos = currentJob ? jobs.indexOf(currentJob) + 1 : 0;
+  queueText.textContent = (pos ? `Account ${pos} of ${jobs.length}` : `${jobs.length} account${jobs.length === 1 ? '' : 's'}`)
+    + (parts.length ? '  ·  ' + parts.join('  ·  ') : '');
+
+  queueProgress.innerHTML = '';
+  queueChips.innerHTML = '';
+  jobs.forEach((job, i) => {
+    const seg = document.createElement('span');
+    seg.className = `queue-seg ${job.status}${job === currentJob ? ' current' : ''}`;
+    seg.title = `${i + 1}. ${job.folder.rsn}: ${STATUS_LABELS[job.status]}`;
+    queueProgress.appendChild(seg);
+
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = `queue-chip ${job.status}${job === currentJob ? ' current' : ''}`;
+    chip.textContent = `${i + 1}. ${job.folder.rsn} · ${STATUS_LABELS[job.status]}`;
+    const openable = job !== currentJob && ['waiting', 'ready', 'error'].includes(job.status);
+    chip.disabled = !openable;
+    if (job.status === 'error') chip.title = job.error + ' (click to retry)';
+    if (openable) chip.addEventListener('click', () => loadJob(job));
+    queueChips.appendChild(chip);
+  });
+
+  const redacting = currentJob && currentJob.status === 'redacting';
+  queueNext.classList.toggle('hidden', redacting || !jobs.some((j) => j.status === 'waiting'));
+  queueTidy.classList.toggle('hidden', !jobs.some((j) => j.status === 'published'));
+  renderFolderList();
+}
+
+queueNext.addEventListener('click', loadNextJob);
+queueTidy.addEventListener('click', () => {
+  for (let i = jobs.length - 1; i >= 0; i--) if (jobs[i].status === 'published') jobs.splice(i, 1);
+  renderQueue();
 });
-folderReload.addEventListener('click', loadFolders);
+
 loadFolders();
 
 // Called by the Eldorado panel after a publish moved the folder to Listed.
 window.folderPublished = function () {
+  if (currentJob) {
+    currentJob.status = 'published';
+    currentJob.panelState = null;
+  }
+  currentJob = null;
   currentFolder = null;
+  renderQueue();
   loadFolders();
+  if (jobs.some((j) => j.status === 'ready' || j.status === 'waiting')) {
+    folderHint.textContent = 'Published. Pick the next account in the queue.';
+  }
 };
 
 // Put a 2FA secret key on the "2FA Secret Key:" line of a message (added at the end if missing).

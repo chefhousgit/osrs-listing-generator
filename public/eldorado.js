@@ -24,6 +24,8 @@
   const pickFileBtn = document.getElementById('edPickFile');
   const autoCardBtn = document.getElementById('edAutoCard');
   const imageFileInput = document.getElementById('edImageFile');
+  const extrasEl = document.getElementById('edExtras');
+  const extrasHint = document.getElementById('edExtrasHint');
   const accountHint = document.getElementById('edAccountHint');
   const secretInputs = ['edAccountLogin', 'edAccountPassword', 'edEmailLogin', 'edEmailPassword', 'edEmailProvider']
     .map((id) => document.getElementById(id));
@@ -214,6 +216,74 @@
     additionalInput.value = ctx.handover || '';
   }
 
+  // ---------- more images: uploaded after the card, never on it ----------
+  // The bank screenshot is ticked by default (the model's read of each screenshot, or "bank" in the
+  // file name). An unredacted skills / overview screenshot can't be ticked, same rule as the card.
+  let extraPicked = new Set(); // indexes into the current screenshots
+  let extraUrls = [];
+
+  function shotType(i) {
+    const shots = (ctx && ctx.result && ctx.result.extractedData && ctx.result.extractedData.perScreenshot) || [];
+    const hit = shots.find((p) => Number(p.imageIndex) === i + 1);
+    return hit ? String(hit.screenshotType || '') : '';
+  }
+  const isBankShot = (file, i) => /bank/i.test(shotType(i)) || /bank/i.test(file.name);
+  const isSkillsShot = (file, i) => /stat|skill|overview/i.test(shotType(i)) || /stat|skill|overview/i.test(file.name);
+  const extraBlocked = (file, i, now) => isSkillsShot(file, i) && !now.isRedacted(file);
+
+  function defaultExtras() {
+    const now = currentShots();
+    extraPicked = new Set();
+    if (!now) return;
+    now.files.forEach((file, i) => { if (isBankShot(file, i) && !extraBlocked(file, i, now)) extraPicked.add(i); });
+  }
+
+  function renderExtras() {
+    extraUrls.forEach((u) => URL.revokeObjectURL(u));
+    extraUrls = [];
+    extrasEl.innerHTML = '';
+    const now = ctx && currentShots();
+    if (!now) return;
+    now.files.forEach((file, i) => {
+      const blocked = extraBlocked(file, i, now);
+      if (blocked) extraPicked.delete(i);
+      const label = document.createElement('label');
+      label.className = 'card-pick' + (extraPicked.has(i) ? ' on' : '') + (blocked ? ' unredacted' : '');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = extraPicked.has(i);
+      cb.disabled = blocked;
+      cb.addEventListener('change', () => {
+        if (cb.checked) extraPicked.add(i); else extraPicked.delete(i);
+        label.classList.toggle('on', cb.checked);
+        updateExtrasHint();
+      });
+      const url = URL.createObjectURL(file);
+      extraUrls.push(url);
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = 'Screenshot ' + (i + 1);
+      const cap = document.createElement('span');
+      const type = shotType(i);
+      cap.textContent = (i + 1) + '. ' + (blocked ? 'Redact first' : (type || file.name));
+      label.append(cb, img, cap);
+      extrasEl.appendChild(label);
+    });
+    updateExtrasHint();
+  }
+
+  function updateExtrasHint() {
+    const n = extraPicked.size;
+    extrasHint.textContent = n
+      ? `(${n} after the card, uploaded as-is, never on it)`
+      : '(none ticked: only the card will be uploaded)';
+  }
+
+  function pickedExtraFiles() {
+    const now = currentShots();
+    return Array.from(extraPicked).sort((a, b) => a - b).map((i) => now.files[i]).filter(Boolean);
+  }
+
   // ---------- main image ----------
   function setMainImage(blob, source) {
     mainImage = blob ? { blob, source } : null;
@@ -225,9 +295,13 @@
     autoCardBtn.classList.toggle('hidden', !blob || source === 'auto');
   }
 
+  // Current screenshots, not the snapshot from Generate, so later redactions count.
+  function currentShots() {
+    return (window.getListingContext && window.getListingContext()) || ctx;
+  }
+
   function cardOptions() {
-    // Current screenshots, not the snapshot from Generate, so later redactions count.
-    const now = (window.getListingContext && window.getListingContext()) || ctx;
+    const now = currentShots();
     return {
       files: now.files,
       isRedacted: now.isRedacted,
@@ -282,7 +356,8 @@
     if (!ctx || !ctx.files.length) return;
     window.openCardTool(Object.assign(cardOptions(), {
       onUse: (blob) => setMainImage(blob, 'edited'),
-      onRedact: window.redactFile
+      onRedact: window.redactFile,
+      onMarkRedacted: window.markRedacted
     }));
   });
   pickFileBtn.addEventListener('click', () => imageFileInput.click());
@@ -311,6 +386,8 @@
     priceInput.value = '';
     setMainImage(null);
     refreshAutoCard();
+    defaultExtras();
+    renderExtras();
     originalEmailInput.checked = false;
     submitBtn.disabled = false;
     submitBtn.textContent = 'Create offer (paused)';
@@ -343,6 +420,8 @@
     clearTimeout(cardTimer);
     setMainImage(null);
     ctx = null;
+    extraPicked = new Set();
+    renderExtras();
     accountHint.textContent = '';
     // Don't carry the last account's key into the next listing's handover message.
     if (keyFilled && window.setHandoverKey) window.setHandoverKey('');
@@ -355,6 +434,11 @@
     if (missing.length) {
       setNote('Pick a value for: ' + missing.map(([id]) => config.osrs.attributes.find((a) => a.id === id).name).join(', '), 'error');
       return;
+    }
+    // The auto card may still be rebuilding (e.g. right after a redaction): finish it first.
+    if (!mainImage) {
+      clearTimeout(cardTimer);
+      await refreshAutoCard();
     }
     if (!mainImage) {
       setNote('Eldorado needs a main image. Upload screenshots for the card, or use a file.', 'error');
@@ -381,6 +465,8 @@
     const body = new FormData();
     body.append('payload', JSON.stringify(payload));
     body.append('mainImage', mainImage.blob, mainImage.source === 'file' && mainImage.blob.name ? mainImage.blob.name : 'listing-card.png');
+    const extras = pickedExtraFiles();
+    extras.forEach((file) => body.append('extraImages', file, file.name));
     try {
       const res = await fetch('/eldorado/publish', { method: 'POST', body });
       const data = await res.json().catch(() => ({}));
@@ -393,7 +479,8 @@
       secretInputs.forEach((el) => { el.value = ''; });
       if (data.paused) {
         const noDelivery = data.withDelivery ? '' : ' No delivery details were sent, so add them there too.';
-        setNote(`Created and paused (offer ${data.offerId}) with the listing card as its main image. Add more images on Eldorado if you like, then resume it there.${noDelivery}`, 'ok');
+        const more = extras.length ? ` plus ${extras.length} more image${extras.length === 1 ? '' : 's'}` : '';
+        setNote(`Created and paused (offer ${data.offerId}) with the listing card as its main image${more}. Check it on Eldorado, then resume it there.${noDelivery}`, 'ok');
       } else {
         setNote(`Created (offer ${data.offerId}) but it could NOT be paused, so it is LIVE without images. Pause it on Eldorado now. ${data.pauseError || ''}`, 'error');
       }
@@ -425,8 +512,54 @@
     }
   }
 
+  // Panel edits, kept per queued account while switching between them.
+  window.getEldoradoPanelState = function () {
+    if (!ctx) return null;
+    return {
+      title: titleInput.value,
+      description: descInput.value,
+      price: priceInput.value,
+      delivery: deliverySelect.value,
+      build: buildSelect.value,
+      attrs: Object.fromEntries(Object.entries(attrSelects).map(([id, sel]) => [id, { value: sel.value, guessed: sel.classList.contains('guessed') }])),
+      numeric: Object.fromEntries(Object.entries(numInputs).map(([id, el]) => [id, el.value])),
+      secrets: secretInputs.map((el) => el.value),
+      additional: additionalInput.value,
+      originalEmail: originalEmailInput.checked,
+      mainImage: mainImage && mainImage.source !== 'auto' ? mainImage : null,
+      extras: Array.from(extraPicked)
+    };
+  };
+
+  window.setEldoradoPanelState = function (st) {
+    if (!st || !ctx) return;
+    titleInput.value = st.title;
+    descInput.value = st.description;
+    priceInput.value = st.price;
+    deliverySelect.value = st.delivery;
+    buildSelect.value = st.build;
+    Object.entries(st.attrs).forEach(([id, a]) => {
+      const sel = attrSelects[id];
+      if (!sel) return;
+      sel.value = a.value;
+      markSelect(sel, a.guessed ? 'guessed' : 'picked');
+    });
+    Object.entries(st.numeric).forEach(([id, value]) => { if (numInputs[id]) numInputs[id].value = value; });
+    secretInputs.forEach((el, i) => { el.value = st.secrets[i] || ''; });
+    additionalInput.value = st.additional;
+    originalEmailInput.checked = st.originalEmail;
+    if (st.mainImage) setMainImage(st.mainImage.blob, st.mainImage.source);
+    else queueAutoCard(); // price / title may differ from the defaults
+    extraPicked = new Set(st.extras || []);
+    renderExtras();
+  };
+
   window.fillEldoradoPanel = fill;
-  window.refreshEldoradoCard = queueAutoCard; // a screenshot was redacted after Generate
+  // A screenshot was redacted after Generate: rebuild the card, re-check what can be an extra.
+  window.refreshEldoradoCard = () => {
+    queueAutoCard();
+    renderExtras();
+  };
   window.resetEldoradoPanel = reset;
 
   fetch('/eldorado/config')

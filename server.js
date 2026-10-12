@@ -770,8 +770,10 @@ app.get('/eldorado/config', (req, res) => {
   });
 });
 
-// Multipart: "payload" is the JSON form, "mainImage" the offer's main picture (the listing card).
-app.post('/eldorado/publish', upload.single('mainImage'), async (req, res) => {
+// Multipart: "payload" is the JSON form, "mainImage" the offer's main picture (the listing card),
+// "extraImages" the further pictures in order (e.g. the bank screenshot).
+const publishUpload = upload.fields([{ name: 'mainImage', maxCount: 1 }, { name: 'extraImages', maxCount: 9 }]);
+app.post('/eldorado/publish', publishUpload, async (req, res) => {
   if (!eldorado.isConfigured()) {
     return res.status(500).json({ error: 'Eldorado API is not set up. Add ELDORADO_CLIENT_ID and ELDORADO_CLIENT_SECRET to .env and restart.' });
   }
@@ -782,7 +784,8 @@ app.post('/eldorado/publish', upload.single('mainImage'), async (req, res) => {
     } catch (e) {
       return res.status(400).json({ error: 'Bad publish request.' });
     }
-    const result = await eldorado.publishPausedAccountOffer(payload, req.file);
+    const files = req.files || {};
+    const result = await eldorado.publishPausedAccountOffer(payload, (files.mainImage || [])[0], files.extraImages || []);
     // The offer exists now, so file the account folder away (if it came from one).
     if (payload.folder && folders.isConfigured()) {
       try {

@@ -195,15 +195,16 @@ function buildAccountOffer(input) {
   };
 }
 
-// Upload the main image, create the offer with it, then pause the offer right away so it
-// can be finished on Eldorado (more images) before going live.
-async function publishPausedAccountOffer(input, mainImage) {
+// Upload the main image and any extra images, create the offer with them, then pause the offer
+// right away so it can be checked on Eldorado before going live.
+async function publishPausedAccountOffer(input, mainImage, extraImages = []) {
   const offer = buildAccountOffer(input);
   if (!mainImage || !mainImage.buffer || !mainImage.buffer.length) {
     throw new EldoradoError('Eldorado needs a main image. Pick one in the dialog.', 400);
   }
   offer.details.mainOfferImage = await uploadOfferImage(mainImage);
   offer.details.offerImages = [];
+  for (const file of extraImages) offer.details.offerImages.push(await uploadOfferImage(file));
   const created = await api('POST', '/api/flexibleOffers/account', offer);
   const offerId = created && created.id;
   if (!offerId) {
