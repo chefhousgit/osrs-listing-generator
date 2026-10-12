@@ -769,7 +769,7 @@ handoverCopy.addEventListener('click', async () => {
 
 // ---------- Account folders (ACCOUNTS_DIR) ----------
 // Picking a folder starts a fresh listing: its screenshots, the RSN and type/ban from the folder
-// name ("Zezima - hc - temp"). The Eldorado panel reads the folder's login.txt and, after a
+// name ("Zezima - hc - temp"). The Eldorado panel reads the folder's .txt login file and, after a
 // publish, the server moves the folder to Listed.
 const folderRow = document.getElementById('folderRow');
 const folderPick = document.getElementById('folderPick');
@@ -798,11 +798,11 @@ async function loadFolders() {
     folderList.forEach((f) => {
       const o = document.createElement('option');
       o.value = f.name;
-      o.textContent = `${f.name}  (${f.images} img${f.hasLogin ? '' : ', no login.txt'})`;
+      o.textContent = `${f.name}  (${f.images} img${f.hasLogin ? '' : ', no login file'})`;
       folderPick.appendChild(o);
     });
     folderPick.value = folderList.some((f) => f.name === keep) ? keep : '';
-    folderHint.textContent = data.error || 'Loads the folder\'s screenshots, account name, type and login.txt.';
+    folderHint.textContent = data.error || 'Loads the folder\'s screenshots, account name, type and login (.txt) file.';
   } catch (e) {
     folderHint.textContent = 'Could not load the account folders.';
   }
@@ -833,7 +833,7 @@ folderPick.addEventListener('change', async () => {
     if (currentFolder !== name) return; // picked another folder meanwhile
     addFiles(files);
     const typeText = folder.type === 'auto' ? 'type: Auto' : 'type: ' + folder.type.toUpperCase();
-    folderHint.textContent = `${files.length} screenshot${files.length === 1 ? '' : 's'}, ${typeText}${folder.tempBan ? ', had a temp ban' : ''}${folder.hasLogin ? ', login.txt found' : ', no login.txt'}.`;
+    folderHint.textContent = `${files.length} screenshot${files.length === 1 ? '' : 's'}, ${typeText}${folder.tempBan ? ', had a temp ban' : ''}${folder.hasLogin ? ', login file found' : ', no login file'}.`;
   } catch (e) {
     folderHint.textContent = 'Could not load the screenshots: ' + e.message;
   }

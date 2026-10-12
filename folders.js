@@ -1,15 +1,15 @@
 // Account folders: ACCOUNTS_DIR in .env points at a folder holding one subfolder per account,
 // named "<RSN>" plus optional " - <tag>" suffixes: a type (hcim/hc, uim, im/iron, main) and/or "temp"
 // for a past temporary ban, e.g. "Zezima - hc - temp". Each subfolder has the screenshots
-// for the listing and an optional login.txt ("email:password:key"). After a publish the folder is
+// for the listing and one .txt file, any name ("email:password:key", e.g. an EternalFarms
+// accounts-export-*.txt; the first valid line is used). After a publish the folder is
 // moved into ACCOUNTS_DIR\Listed. Nothing here logs file contents.
 
 const fs = require('fs/promises');
 const path = require('path');
-const { parseLine } = require('./accounts');
+const { parseText, findTxt } = require('./accounts');
 
 const LISTED_DIR = 'Listed';
-const LOGIN_FILE = 'login.txt';
 const IMAGE_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 const SUFFIX_TYPES = { hcim: 'hcim', hc: 'hcim', uim: 'uim', im: 'ironman', iron: 'ironman', ironman: 'ironman', main: 'main' };
 const BAN_TAGS = ['temp'];
@@ -75,7 +75,7 @@ async function folderFiles(name) {
   const files = entries.filter((e) => e.isFile()).map((e) => e.name);
   return {
     images: files.filter((f) => IMAGE_TYPES[path.extname(f).toLowerCase()]).sort(byName),
-    hasLogin: files.some((f) => f.toLowerCase() === LOGIN_FILE)
+    hasLogin: files.some((f) => /\.txt$/i.test(f))
   };
 }
 
@@ -91,13 +91,11 @@ async function readImage(name, file) {
   return { buffer: await fs.readFile(path.join(dir, file)), type: IMAGE_TYPES[path.extname(file).toLowerCase()] };
 }
 
+// First valid line of the folder's .txt file (any name), or null.
 async function readLogin(name) {
-  const dir = await resolveFolder(name);
-  const entries = await fs.readdir(dir);
-  const file = entries.find((f) => f.toLowerCase() === LOGIN_FILE);
+  const file = await findTxt(await resolveFolder(name));
   if (!file) return null;
-  const text = await fs.readFile(path.join(dir, file), 'utf8');
-  return text.replace(/^﻿/, '').split(/\r?\n/).map(parseLine).find(Boolean) || null;
+  return parseText(await fs.readFile(file, 'utf8'))[0] || null;
 }
 
 // Move a published account into ACCOUNTS_DIR\Listed, adding " (2)", " (3)"... if the name is taken.

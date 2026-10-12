@@ -294,7 +294,7 @@
     if (ctx.folder) fillFromFolder(ctx.folder);
   }
 
-  // Delivery login from the account folder's login.txt (email:password:key).
+  // Delivery login from the account folder's .txt file (email:password:key).
   async function fillFromFolder(folder) {
     try {
       const res = await fetch('/folders/' + encodeURIComponent(folder) + '/login', { cache: 'no-store' });
@@ -302,13 +302,13 @@
       if (!ctx || ctx.folder !== folder) return;
       if (!res.ok) throw new Error(data.error || 'status ' + res.status);
       if (!data.login) {
-        accountHint.textContent = `(no login.txt in "${folder}": pick one or type it in)`;
+        accountHint.textContent = `(no .txt login file in "${folder}": pick one or type it in)`;
         return;
       }
       applyAccount(data.login);
-      accountHint.textContent = `(filled from "${folder}\\login.txt")`;
+      accountHint.textContent = `(filled from the login file in "${folder}")`;
     } catch (err) {
-      accountHint.textContent = '(could not read login.txt: ' + err.message + ')';
+      accountHint.textContent = '(could not read the login file: ' + err.message + ')';
     }
   }
 
@@ -392,6 +392,7 @@
   // or a file loaded in the browser with Load file..., kept in memory for this page only.
   let localAccounts = null; // [{ email, password, key }] from Load file...
   let keyFilled = false;    // the handover message got a key from here
+  let serverFile = null;    // name of the server-side accounts file the dropdown came from
 
   function parseAccountLine(line) {
     const text = line.trim();
@@ -417,7 +418,7 @@
       const data = await fetch('/accounts').then((r) => r.json());
       if (!data.configured) {
         listAccounts([], '');
-        accountHint.textContent = '(set ACCOUNTS_FILE in .env, or use Load file...)';
+        accountHint.textContent = '(put the accounts .txt in your accounts folder, set ACCOUNTS_FILE, or use Load file...)';
         accountReloadBtn.classList.add('hidden');
         return;
       }
@@ -427,7 +428,8 @@
         accountHint.textContent = '(' + data.error + ')';
         return;
       }
-      listAccounts(data.accounts.map((a) => a.email), 'ACCOUNTS_FILE');
+      serverFile = data.file;
+      listAccounts(data.accounts.map((a) => a.email), data.file);
     } catch (e) {
       accountHint.textContent = '(could not load the accounts list)';
     }
@@ -451,7 +453,7 @@
       applyAccount(localAccounts[Number(id)]);
       return;
     }
-    const res = await fetch('/accounts/' + encodeURIComponent(id), { cache: 'no-store' });
+    const res = await fetch('/accounts/' + encodeURIComponent(id) + '?file=' + encodeURIComponent(serverFile || ''), { cache: 'no-store' });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       setNote(data.error || 'Could not read that account.', 'error');

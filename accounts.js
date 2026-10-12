@@ -1,15 +1,33 @@
 // Account credentials file for the Eldorado delivery details: one "email:password:key" per line.
-// The path comes from ACCOUNTS_FILE in .env. The file is read fresh on every request (edits show up
-// without a restart) and its contents are never logged or written anywhere.
+// ACCOUNTS_FILE in .env names it; without that, the .txt file in ACCOUNTS_DIR is used (any name,
+// e.g. an EternalFarms accounts-export-*.txt; there should only be one, the newest wins otherwise).
+// The file is read fresh on every request (edits show up without a restart) and its contents are
+// never logged or written anywhere.
 
 const fs = require('fs/promises');
+const path = require('path');
 
-function filePath() {
-  return (process.env.ACCOUNTS_FILE || '').trim().replace(/^"(.*)"$/, '$1');
+const TXT = /\.txt$/i;
+
+const envPath = (name) => (process.env[name] || '').trim().replace(/^"(.*)"$/, '$1');
+
+// The .txt file directly inside dir (newest if there are several), or null.
+async function findTxt(dir) {
+  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+  const files = await Promise.all(entries
+    .filter((e) => e.isFile() && TXT.test(e.name))
+    .map(async (e) => {
+      const file = path.join(dir, e.name);
+      return { file, mtime: (await fs.stat(file)).mtimeMs };
+    }));
+  files.sort((a, b) => b.mtime - a.mtime);
+  return files.length ? files[0].file : null;
 }
 
-function isConfigured() {
-  return Boolean(filePath());
+async function resolvePath() {
+  if (envPath('ACCOUNTS_FILE')) return envPath('ACCOUNTS_FILE');
+  if (envPath('ACCOUNTS_DIR')) return findTxt(envPath('ACCOUNTS_DIR'));
+  return null;
 }
 
 // email = before the first ":", key = after the last ":", password = everything in between,
@@ -26,14 +44,19 @@ function parseLine(line) {
   return { email, password, key };
 }
 
-async function readAccounts() {
-  let text;
-  try {
-    text = await fs.readFile(filePath(), 'utf8');
-  } catch (err) {
-    throw new Error(`Could not read ACCOUNTS_FILE (${err.code || 'error'}). Check the path in .env.`);
-  }
+function parseText(text) {
   return text.replace(/^﻿/, '').split(/\r?\n/).map(parseLine).filter(Boolean);
 }
 
-module.exports = { isConfigured, readAccounts, parseLine };
+// null when there is no accounts file to read (not set, and no .txt in ACCOUNTS_DIR).
+async function readAccounts() {
+  const file = await resolvePath();
+  if (!file) return null;
+  try {
+    return { name: path.basename(file), accounts: parseText(await fs.readFile(file, 'utf8')) };
+  } catch (err) {
+    throw new Error(`Could not read the accounts file (${err.code || 'error'}). Check ACCOUNTS_FILE in .env.`);
+  }
+}
+
+module.exports = { readAccounts, parseLine, parseText, findTxt };
