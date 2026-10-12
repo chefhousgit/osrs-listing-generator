@@ -204,7 +204,7 @@ Return the response as valid JSON in this exact structure. Fill extractedData FI
     ],
     "unreadableOrUnclear": ["list of things you could see existed but could not read with confidence - e.g. 'total XP number was too small to read', 'bank was visible but individual items were too small to identify'"]
   },
-  "accountType": "string describing the detected account type, or 'Unknown' if not clear",
+  "accountType": "exactly one of: 'Main', 'Ironman', 'Hardcore Ironman', 'Ultimate Ironman', 'Group Ironman', 'Hardcore Group Ironman', 'Unranked Group Ironman', or 'Unknown' if not clear (an ironman helmet icon next to the name, or a GIM icon, decides it)",
   "dataAvailable": {
     "stats": true/false,
     "overview": true/false,
@@ -217,7 +217,9 @@ Return the response as valid JSON in this exact structure. Fill extractedData FI
     "combatLevel": number or null,
     "totalLevel": number or null,
     "totalXP": "string or null",
-    "quests": "exact number as seen, e.g. '101' or null"
+    "quests": "exact number as seen, e.g. '101' or null",
+    "questPoints": "number: quest points exactly as shown (quest tab header or overview), or null",
+    "petsCount": "number: how many pets are clearly shown (collection log Pets count, pet list, menagerie, or an overview pets figure), 0 only if a pets view is shown and it is empty, otherwise null"
   },
   "listing": { "title": "...", "description": "..." },
   "notes": "optional string with any caveats, like 'No bank screenshot provided, so no gear section included' or null"

@@ -14,6 +14,7 @@
   const deliverySelect = document.getElementById('edDelivery');
   const buildSelect = document.getElementById('edBuild');
   const attrsEl = document.getElementById('edAttributes');
+  const numericEl = document.getElementById('edNumeric');
   const additionalInput = document.getElementById('edAdditional');
   const originalEmailInput = document.getElementById('edOriginalEmail');
   const secretInputs = ['edAccountLogin', 'edAccountPassword', 'edEmailLogin', 'edEmailPassword', 'edEmailProvider']
@@ -36,74 +37,153 @@
     return o;
   }
 
+  // Exact-number attribute -> the bracket select it drives.
+  const NUMERIC_TO_SELECT = {
+    'osrs-total-level-numeric': 'osrs-total-level',
+    'osrs-combat-level-numeric': 'osrs-combat-level',
+    'osrs-quest-points-numeric': 'osrs-quest-points',
+    'osrs-pets-count-numeric': 'osrs-pets'
+  };
+  // Used when nothing in the listing says otherwise; shown in amber so they get checked.
+  const FALLBACKS = { 'osrs-account-type': 'regular', 'osrs-quest-points': 'points-099', 'osrs-pets': 'pets-0' };
+
+  const numInputs = {}; // numeric attribute id -> <input>
+
+  function markSelect(select, state) {
+    select.classList.toggle('needs-pick', !select.value);
+    select.classList.toggle('guessed', Boolean(select.value) && state === 'guessed');
+  }
+
+  function field(labelText, control) {
+    const label = document.createElement('label');
+    label.className = 'card-field';
+    const span = document.createElement('span');
+    span.textContent = labelText;
+    label.append(span, control);
+    return label;
+  }
+
   function buildForm() {
     config.deliveryTimes.forEach((t) => deliverySelect.appendChild(option(t, DELIVERY_LABELS[t] || t)));
     config.osrs.tradeEnvironments.forEach((t) => buildSelect.appendChild(option(t.id, t.name)));
     config.osrs.attributes.forEach((attr) => {
-      const label = document.createElement('label');
-      label.className = 'card-field';
-      const span = document.createElement('span');
-      span.textContent = attr.name;
       const select = document.createElement('select');
       select.appendChild(option('', 'Pick...'));
       attr.values.forEach((v) => select.appendChild(option(v.id, v.name)));
-      select.addEventListener('change', () => select.classList.toggle('needs-pick', !select.value));
-      label.append(span, select);
-      attrsEl.appendChild(label);
+      select.addEventListener('change', () => markSelect(select, 'picked'));
+      attrsEl.appendChild(field(attr.name, select));
       attrSelects[attr.id] = select;
+    });
+    config.osrs.numericAttributes.forEach((attr) => {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.inputMode = 'numeric';
+      input.placeholder = `${attr.min}-${attr.max}`;
+      input.addEventListener('input', () => {
+        const select = attrSelects[NUMERIC_TO_SELECT[attr.id]];
+        const id = bracketFor(NUMERIC_TO_SELECT[attr.id], toNumber(input.value));
+        if (select && id) {
+          select.value = id;
+          markSelect(select, 'picked');
+        }
+      });
+      numericEl.appendChild(field('Exact ' + attr.name.toLowerCase(), input));
+      numInputs[attr.id] = input;
     });
   }
 
-  // Pick the bracket ("36-46", "300+", "2000-2376") whose range contains n.
+  function toNumber(v) {
+    const n = typeof v === 'number' ? v : parseInt(String(v == null ? '' : v).replace(/[^\d]/g, ''), 10);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  // Pick the option ("36-46", "300+", "2000-2376", "7") whose range contains n.
   function bracketFor(attrId, n) {
-    if (n == null || !Number.isFinite(Number(n))) return '';
+    if (n == null) return '';
     const attr = config.osrs.attributes.find((a) => a.id === attrId);
     const hit = attr && attr.values.find((v) => {
       const range = v.name.match(/^(\d+)\s*-\s*(\d+)$/);
       if (range) return n >= Number(range[1]) && n <= Number(range[2]);
       const plus = v.name.match(/^(\d+)\+$/);
-      return plus ? n >= Number(plus[1]) : false;
+      if (plus) return n >= Number(plus[1]);
+      return /^\d+$/.test(v.name) && Number(v.name) === n;
     });
     return hit ? hit.id : '';
   }
 
-  function accountTypeKey(ctx) {
-    if (TYPE_MAP[ctx.accountType]) return ctx.accountType;
+  // Eldorado osrs-account-type value: forced pill, then a non-main hiscore board, then the model.
+  function accountTypeValue(ctx) {
+    if (TYPE_MAP[ctx.accountType]) return TYPE_MAP[ctx.accountType];
+    const board = ctx.result.hiscoresUsed && ctx.result.hiscoresUsed.accountType;
+    const BOARD_MAP = { ironman: 'ironman', hardcore: 'hcim', ultimate: 'uim' };
+    if (BOARD_MAP[board]) return BOARD_MAP[board];
     const s = String(ctx.result.accountType || '').toLowerCase();
+    if (/hardcore group|hcgim/.test(s)) return 'hcgim';
+    if (/unranked group|ugim/.test(s)) return 'ugim';
+    if (/group|gim/.test(s)) return 'gim';
     if (/ultimate|uim/.test(s)) return 'uim';
     if (/hardcore|hcim/.test(s)) return 'hcim';
     if (/iron/.test(s)) return 'ironman';
-    if (/main|regular/.test(s)) return 'main';
+    if (/main|regular|normal/.test(s)) return 'regular';
     return '';
   }
 
-  // Stats: hiscores first (authoritative), then what the model read off the screenshots.
+  function computeCombat(levels) {
+    const need = ['Attack', 'Strength', 'Defence', 'Hitpoints', 'Prayer', 'Ranged', 'Magic'];
+    if (!need.every((k) => levels[k])) return null;
+    const base = 0.25 * (levels.Defence + levels.Hitpoints + Math.floor(levels.Prayer / 2));
+    const melee = 0.325 * (levels.Attack + levels.Strength);
+    const range = 0.325 * (Math.floor(levels.Ranged / 2) + levels.Ranged);
+    const mage = 0.325 * (Math.floor(levels.Magic / 2) + levels.Magic);
+    return Math.floor(base + Math.max(melee, range, mage));
+  }
+
+  // Exact numbers from everything the listing knows: hiscores first (authoritative), then the
+  // model's key stats, then per-screenshot reads, then skill levels seen on a stats screenshot.
   function stats(result) {
-    const hs = result.hiscoresUsed;
-    const overall = hs && Array.isArray(hs.skills) ? hs.skills.find((s) => s.name === 'Overall') : null;
+    const hs = result.hiscoresUsed || {};
+    const overall = Array.isArray(hs.skills) ? hs.skills.find((s) => s.name === 'Overall') : null;
     const shots = (result.extractedData && result.extractedData.perScreenshot) || [];
-    const fromShots = (key) => shots.map((s) => s[key]).find((v) => typeof v === 'number');
     const key = result.keyStats || {};
+    const first = (...vals) => vals.map(toNumber).find((n) => n != null) ?? null;
+    const fromShots = (k) => first(...shots.map((s) => s[k]));
+
+    const levels = {};
+    shots.forEach((s) => (s.skillsVisible || []).forEach((sk) => {
+      const n = toNumber(sk.level);
+      if (sk.skill && n) levels[sk.skill] = n;
+    }));
+
     return {
-      combat: (hs && hs.combatLevel) || key.combatLevel || fromShots('combatLevel'),
-      total: (overall && overall.level) || key.totalLevel || fromShots('totalLevel'),
-      questPoints: fromShots('questPoints')
+      total: first(overall && overall.level, key.totalLevel, fromShots('totalLevel')),
+      combat: first(hs.combatLevel, key.combatLevel, fromShots('combatLevel'), computeCombat(levels)),
+      questPoints: first(key.questPoints, fromShots('questPoints')),
+      pets: first(key.petsCount)
     };
   }
 
   function prefill(ctx) {
     const s = stats(ctx.result);
+    const exact = {
+      'osrs-total-level-numeric': s.total,
+      'osrs-combat-level-numeric': s.combat,
+      'osrs-quest-points-numeric': s.questPoints,
+      'osrs-pets-count-numeric': s.pets
+    };
+    Object.entries(numInputs).forEach(([id, input]) => { input.value = exact[id] != null ? String(exact[id]) : ''; });
+
     const values = {
-      'osrs-account-type': TYPE_MAP[accountTypeKey(ctx)] || '',
+      'osrs-account-type': accountTypeValue(ctx),
       'osrs-login-method': LOGIN_MAP[ctx.loginMethod] || '',
       'osrs-combat-level': bracketFor('osrs-combat-level', s.combat),
       'osrs-total-level': bracketFor('osrs-total-level', s.total),
       'osrs-quest-points': bracketFor('osrs-quest-points', s.questPoints),
-      'osrs-pets': ''
+      'osrs-pets': bracketFor('osrs-pets', s.pets)
     };
     Object.entries(attrSelects).forEach(([id, select]) => {
-      select.value = values[id] || '';
-      select.classList.toggle('needs-pick', !select.value);
+      const guessed = !values[id] && FALLBACKS[id];
+      select.value = values[id] || FALLBACKS[id] || '';
+      markSelect(select, guessed ? 'guessed' : 'picked');
     });
 
     titleInput.value = ctx.title.trim();
@@ -127,7 +207,7 @@
     originalEmailInput.checked = false;
     submitBtn.disabled = false;
     submitBtn.textContent = 'Create offer (paused)';
-    setNote('Fields marked in red still need picking.', null);
+    setNote('Red: still needs picking. Amber: best guess, check it.', null);
     modal.classList.remove('hidden');
     priceInput.focus();
   }
@@ -155,6 +235,7 @@
       deliveryTime: deliverySelect.value,
       build: buildSelect.value,
       attributes: Object.fromEntries(Object.entries(attrSelects).map(([id, sel]) => [id, sel.value])),
+      numeric: Object.fromEntries(Object.entries(numInputs).map(([id, input]) => [id, input.value.trim()])),
       hasOriginalEmail: originalEmailInput.checked,
       delivery: { accountLogin, accountPassword, emailLogin, emailPassword, emailProviderUrl, additionalInfo: additionalInput.value }
     };

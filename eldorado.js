@@ -100,11 +100,21 @@ function buildAccountOffer(input) {
   const build = OSRS.tradeEnvironments.find((t) => t.id === String(input.build));
   if (!build) bad('Pick an account build.');
 
+  // Same shape Eldorado's own sell form sends: the attribute id, with the chosen option(s)
+  // in `values` for selects and the exact number in `value` for numerics.
   const chosen = input.attributes || {};
   const offerAttributes = OSRS.attributes.map((attr) => {
     const value = attr.values.find((v) => v.id === chosen[attr.id]);
     if (!value) bad(`Pick a value for ${attr.name}.`);
-    return { id: value.id };
+    return { id: attr.id, type: 'Select', values: [value.id] };
+  });
+  const numbers = input.numeric || {};
+  OSRS.numericAttributes.forEach((attr) => {
+    const raw = numbers[attr.id];
+    if (raw === undefined || raw === null || raw === '') return;
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < attr.min || n > attr.max) bad(`${attr.name} must be a whole number from ${attr.min} to ${attr.max}.`);
+    offerAttributes.push({ id: attr.id, type: 'Numeric', value: n });
   });
 
   const d = input.delivery || {};

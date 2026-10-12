@@ -1227,6 +1227,7 @@ html, body {
 
 .eldorado-dialog {
   width: min(720px, 100%);
+  color-scheme: dark;
 }
 
 .eldorado-body {
@@ -1235,6 +1236,7 @@ html, body {
   gap: 12px;
   padding: 4px 16px 16px;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .eldorado-body .card-field textarea {
@@ -1265,6 +1267,20 @@ html, body {
 
 .eldorado-body select.needs-pick {
   border-color: var(--danger);
+}
+
+.eldorado-body select.guessed {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold-dim);
+}
+
+.eldorado-numeric {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.eldorado-numeric input {
+  min-width: 0;
+  width: 100%;
 }
 
 .eldorado-section {

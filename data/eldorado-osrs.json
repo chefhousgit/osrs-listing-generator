@@ -248,5 +248,31 @@
         }
       ]
     }
+  ],
+  "numericAttributes": [
+    {
+      "id": "osrs-total-level-numeric",
+      "name": "Total Level",
+      "min": 32,
+      "max": 2376
+    },
+    {
+      "id": "osrs-combat-level-numeric",
+      "name": "Combat Level",
+      "min": 3,
+      "max": 126
+    },
+    {
+      "id": "osrs-quest-points-numeric",
+      "name": "Quest Points",
+      "min": 0,
+      "max": 350
+    },
+    {
+      "id": "osrs-pets-count-numeric",
+      "name": "Pets Count",
+      "min": 0,
+      "max": 70
+    }
   ]
 }
