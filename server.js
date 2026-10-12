@@ -706,12 +706,19 @@ app.get('/eldorado/config', (req, res) => {
   });
 });
 
-app.post('/eldorado/publish', express.json({ limit: '100kb' }), async (req, res) => {
+// Multipart: "payload" is the JSON form, "mainImage" the offer's main picture (the listing card).
+app.post('/eldorado/publish', upload.single('mainImage'), async (req, res) => {
   if (!eldorado.isConfigured()) {
     return res.status(500).json({ error: 'Eldorado API is not set up. Add ELDORADO_CLIENT_ID and ELDORADO_CLIENT_SECRET to .env and restart.' });
   }
   try {
-    const result = await eldorado.publishPausedAccountOffer(req.body || {});
+    let payload;
+    try {
+      payload = JSON.parse(req.body.payload || '{}');
+    } catch (e) {
+      return res.status(400).json({ error: 'Bad publish request.' });
+    }
+    const result = await eldorado.publishPausedAccountOffer(payload, req.file);
     res.json(result);
   } catch (err) {
     // Never log the request body: it can hold account passwords.

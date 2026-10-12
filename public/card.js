@@ -1,4 +1,6 @@
-// Listing card builder. Exposes window.openCardTool({ files, isRedacted, title, loginMethod }).
+// Listing card builder. Exposes window.openCardTool({ files, isRedacted, title, loginMethod, price, onUse })
+// and window.buildListingCard({ files, isRedacted, title, loginMethod, price }) -> Promise<Blob>, which
+// renders the default card without opening the modal (used by Publish to Eldorado).
 //
 // Draws an OSRS-style framed card (stone border, dark panel, header, screenshots
 // side by side, price) on a canvas, with the afkVault logo in the header and as a
@@ -350,10 +352,11 @@
     return first.replace(/[\p{Extended_Pictographic}️]/gu, '').replace(/\s+/g, ' ').trim();
   }
 
-  window.openCardTool = async function ({ files, isRedacted, title, loginMethod }) {
+  let onUse = null; // set when opened from the publish dialog: Save hands the card back instead
+
+  // Load screenshots and fill the inputs with the defaults (remembered prefs + auto tags).
+  async function prepare({ files, isRedacted, title, loginMethod, price }) {
     releaseEntries();
-    modal.classList.remove('hidden');
-    noteEl.textContent = 'Loading...';
     await Promise.all([ensureLogo().catch(() => null), ensureFont()]);
 
     const loaded = await Promise.all(files.map(async (file) => {
@@ -372,24 +375,48 @@
     const autoTags = [loginMethod === 'jagex' ? 'JL' : 'Legacy', 'Clean'];
     tagsInput.value = autoTags.concat(prefs.extraTags || []).join('\n');
     dateInput.value = '';
-    priceInput.value = '';
+    priceInput.value = price || '';
     alphaInput.value = prefs.watermarkAlpha != null ? prefs.watermarkAlpha : 10;
     headerLogoInput.checked = prefs.headerLogo != null ? prefs.headerLogo : true;
     alphaValue.textContent = alphaInput.value + '%';
+  }
 
+  window.openCardTool = async function (opts) {
+    onUse = typeof opts.onUse === 'function' ? opts.onUse : null;
+    saveBtn.textContent = onUse ? 'Use this card' : 'Save image';
+    modal.classList.toggle('card-on-top', Boolean(onUse));
+    modal.classList.remove('hidden');
+    noteEl.textContent = 'Loading...';
+    await prepare(opts);
     buildPicker();
     render();
   };
 
+  window.buildListingCard = async function (opts) {
+    if (!modal.classList.contains('hidden')) throw new Error('Card builder is open.');
+    await prepare(opts);
+    render();
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    releaseEntries();
+    return blob;
+  };
+
+  window.isCardToolOpen = () => !modal.classList.contains('hidden');
+
   function close() {
     modal.classList.add('hidden');
     releaseEntries();
+    onUse = null;
   }
 
   closeBtn.addEventListener('click', close);
   modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !modal.classList.contains('hidden')) close();
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+      // Opened from the publish dialog: only close the card builder, not the dialog under it.
+      if (onUse) e.stopImmediatePropagation();
+      close();
+    }
   });
 
   [titleInput, tagsInput, dateInput, priceInput].forEach((el) => el.addEventListener('input', queueRender));
@@ -404,6 +431,12 @@
   saveBtn.addEventListener('click', () => {
     canvas.toBlob((blob) => {
       if (!blob) return;
+      if (onUse) {
+        const use = onUse;
+        close();
+        use(blob);
+        return;
+      }
       const base = (titleInput.value.trim() || 'listing')
         .replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
       window.saveImageFile(blob, base + '-card.png');

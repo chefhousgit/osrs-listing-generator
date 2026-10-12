@@ -773,6 +773,8 @@ window.getListingContext = function () {
     description: card ? card.querySelector('.output-desc').value : '',
     accountType,
     loginMethod,
-    handover: handoverText.value
+    handover: handoverText.value,
+    files: selectedFiles.slice(),
+    isRedacted: (file) => redactions.has(file)
   };
 };

@@ -17,6 +17,12 @@
   const numericEl = document.getElementById('edNumeric');
   const additionalInput = document.getElementById('edAdditional');
   const originalEmailInput = document.getElementById('edOriginalEmail');
+  const imagePreview = document.getElementById('edImagePreview');
+  const imageSourceEl = document.getElementById('edImageSource');
+  const editCardBtn = document.getElementById('edEditCard');
+  const pickFileBtn = document.getElementById('edPickFile');
+  const autoCardBtn = document.getElementById('edAutoCard');
+  const imageFileInput = document.getElementById('edImageFile');
   const secretInputs = ['edAccountLogin', 'edAccountPassword', 'edEmailLogin', 'edEmailPassword', 'edEmailProvider']
     .map((id) => document.getElementById(id));
 
@@ -28,6 +34,15 @@
   const LOGIN_MAP = { jagex: 'jagex-launcher', legacy: 'legacy-email-login' };
 
   let config = null;
+  let ctx = null;       // listing snapshot taken when the dialog opens
+  let mainImage = null; // { blob, source: 'auto' | 'edited' | 'file' }
+  let previewUrl = null;
+  let cardTimer = null;
+  const SOURCE_LABELS = {
+    auto: '(listing card, built from your screenshots)',
+    edited: '(listing card, edited)',
+    file: '(your file)'
+  };
   const attrSelects = {}; // attribute id -> <select>
 
   function option(value, label) {
@@ -193,6 +208,63 @@
     additionalInput.value = ctx.handover || '';
   }
 
+  // ---------- main image ----------
+  function setMainImage(blob, source) {
+    mainImage = blob ? { blob, source } : null;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = blob ? URL.createObjectURL(blob) : null;
+    if (previewUrl) imagePreview.src = previewUrl; else imagePreview.removeAttribute('src');
+    imageSourceEl.textContent = blob ? SOURCE_LABELS[source] : '(none yet)';
+    autoCardBtn.classList.toggle('hidden', !blob || source === 'auto');
+  }
+
+  function cardOptions() {
+    return {
+      files: ctx.files,
+      isRedacted: ctx.isRedacted,
+      title: ctx.title,
+      loginMethod: ctx.loginMethod,
+      price: priceInput.value.trim()
+    };
+  }
+
+  // Build the default card (price included) unless the user edited it or picked a file.
+  async function refreshAutoCard() {
+    if (!ctx || (mainImage && mainImage.source !== 'auto')) return;
+    if (!ctx.files.length) {
+      setMainImage(null);
+      imageSourceEl.textContent = '(no screenshots uploaded: use a file)';
+      return;
+    }
+    try {
+      const blob = await window.buildListingCard(cardOptions());
+      if (!mainImage || mainImage.source === 'auto') setMainImage(blob, 'auto');
+    } catch (err) {
+      imageSourceEl.textContent = '(could not build the card: ' + err.message + ')';
+    }
+  }
+
+  function queueAutoCard() {
+    clearTimeout(cardTimer);
+    cardTimer = setTimeout(refreshAutoCard, 400);
+  }
+
+  priceInput.addEventListener('input', queueAutoCard);
+  editCardBtn.addEventListener('click', () => {
+    if (!ctx || !ctx.files.length) return;
+    window.openCardTool(Object.assign(cardOptions(), { onUse: (blob) => setMainImage(blob, 'edited') }));
+  });
+  pickFileBtn.addEventListener('click', () => imageFileInput.click());
+  imageFileInput.addEventListener('change', () => {
+    const file = imageFileInput.files[0];
+    if (file) setMainImage(file, 'file');
+    imageFileInput.value = '';
+  });
+  autoCardBtn.addEventListener('click', () => {
+    mainImage = null;
+    refreshAutoCard();
+  });
+
   function setNote(text, kind) {
     noteEl.textContent = text;
     noteEl.classList.toggle('eldorado-error', kind === 'error');
@@ -200,10 +272,12 @@
   }
 
   function open() {
-    const ctx = window.getListingContext && window.getListingContext();
+    ctx = window.getListingContext && window.getListingContext();
     if (!ctx) return;
     prefill(ctx);
     priceInput.value = '';
+    setMainImage(null);
+    refreshAutoCard();
     originalEmailInput.checked = false;
     submitBtn.disabled = false;
     submitBtn.textContent = 'Create offer (paused)';
@@ -217,6 +291,9 @@
     // Wipe credentials so they don't sit in the page.
     secretInputs.forEach((el) => { el.value = ''; });
     additionalInput.value = '';
+    clearTimeout(cardTimer);
+    setMainImage(null);
+    ctx = null;
   }
 
   form.addEventListener('submit', async (e) => {
@@ -224,6 +301,10 @@
     const missing = Object.entries(attrSelects).filter(([, sel]) => !sel.value);
     if (missing.length) {
       setNote('Pick a value for: ' + missing.map(([id]) => config.osrs.attributes.find((a) => a.id === id).name).join(', '), 'error');
+      return;
+    }
+    if (!mainImage) {
+      setNote('Eldorado needs a main image. Upload screenshots for the card, or use a file.', 'error');
       return;
     }
 
@@ -242,13 +323,12 @@
 
     submitBtn.disabled = true;
     submitBtn.textContent = 'Creating...';
-    setNote('Sending to Eldorado...', null);
+    setNote('Uploading the image and creating the offer...', null);
+    const body = new FormData();
+    body.append('payload', JSON.stringify(payload));
+    body.append('mainImage', mainImage.blob, mainImage.source === 'file' && mainImage.blob.name ? mainImage.blob.name : 'listing-card.png');
     try {
-      const res = await fetch('/eldorado/publish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      const res = await fetch('/eldorado/publish', { method: 'POST', body });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setNote(data.error || ('Request failed with status ' + res.status), 'error');
@@ -259,7 +339,7 @@
       secretInputs.forEach((el) => { el.value = ''; });
       if (data.paused) {
         const noDelivery = data.withDelivery ? '' : ' No delivery details were sent, so add them there too.';
-        setNote(`Created and paused (offer ${data.offerId}). Add the images on Eldorado, then resume it there.${noDelivery}`, 'ok');
+        setNote(`Created and paused (offer ${data.offerId}) with the listing card as its main image. Add more images on Eldorado if you like, then resume it there.${noDelivery}`, 'ok');
       } else {
         setNote(`Created (offer ${data.offerId}) but it could NOT be paused, so it is LIVE without images. Pause it on Eldorado now. ${data.pauseError || ''}`, 'error');
       }
@@ -275,7 +355,8 @@
   closeBtn.addEventListener('click', close);
   modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !modal.classList.contains('hidden')) close();
+    // The card builder handles its own Escape when it is open on top of this dialog.
+    if (e.key === 'Escape' && !modal.classList.contains('hidden') && !(window.isCardToolOpen && window.isCardToolOpen())) close();
   });
 
   fetch('/eldorado/config')

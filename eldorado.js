@@ -79,6 +79,30 @@ async function api(method, apiPath, payload) {
   return body;
 }
 
+// Offer images. Not part of the documented seller API: this is the endpoint Eldorado's own
+// sell form uses (multipart field "image"). It answers { localPaths: [small, large, original] }
+// as "/offerimages/<file>", and offers reference the bare file names.
+async function uploadOfferImage(file) {
+  const token = await getToken();
+  const form = new FormData();
+  form.append('image', new Blob([file.buffer], { type: file.mimetype || 'image/png' }), file.originalname || 'main.png');
+  const res = await fetch(BASE_URL + '/api/files/me/Offer', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token },
+    body: form
+  });
+  const body = await readBody(res);
+  if (res.status === 401) cachedToken = null;
+  if (!res.ok) {
+    throw new EldoradoError(`Eldorado image upload failed (${res.status}): ${describeError(body)}`, res.status, body);
+  }
+  const paths = body && Array.isArray(body.localPaths) ? body.localPaths.map((p) => String(p).replace(/^\/?offerimages\//, '')) : [];
+  if (paths.length < 3) {
+    throw new EldoradoError('Eldorado image upload returned an unexpected response: ' + describeError(body), 502, body);
+  }
+  return { smallImage: paths[0], largeImage: paths[1], originalSizeImage: paths[2] };
+}
+
 const str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
 // Validate the publish form and turn it into an AccountOfferCreatePrivateDTO.
@@ -171,9 +195,15 @@ function buildAccountOffer(input) {
   };
 }
 
-// Create the offer, then pause it right away so it never sits live without images.
-async function publishPausedAccountOffer(input) {
+// Upload the main image, create the offer with it, then pause the offer right away so it
+// can be finished on Eldorado (more images) before going live.
+async function publishPausedAccountOffer(input, mainImage) {
   const offer = buildAccountOffer(input);
+  if (!mainImage || !mainImage.buffer || !mainImage.buffer.length) {
+    throw new EldoradoError('Eldorado needs a main image. Pick one in the dialog.', 400);
+  }
+  offer.details.mainOfferImage = await uploadOfferImage(mainImage);
+  offer.details.offerImages = [];
   const created = await api('POST', '/api/flexibleOffers/account', offer);
   const offerId = created && created.id;
   if (!offerId) {

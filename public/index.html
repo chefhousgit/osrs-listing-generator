@@ -242,7 +242,7 @@
         <h2>Publish to Eldorado</h2>
         <button id="eldoradoClose" class="gear-close" type="button" aria-label="Close">×</button>
       </header>
-      <p class="redact-help">Creates the offer on your live Eldorado account and pauses it straight away. Add the images on Eldorado, then resume it there.</p>
+      <p class="redact-help">Uploads the listing card as the main image, creates the offer on your live Eldorado account, and pauses it straight away. Check it on Eldorado (add more images if you like), then resume it there.</p>
       <form id="eldoradoForm" class="eldorado-body" autocomplete="off">
         <label class="card-field">
           <span>Title</span>
@@ -265,6 +265,18 @@
             <span>Account build</span>
             <select id="edBuild"></select>
           </label>
+        </div>
+        <div class="card-field">
+          <span>Main image <small id="edImageSource">(listing card, built from your screenshots)</small></span>
+          <div class="eldorado-image">
+            <img id="edImagePreview" alt="Main image preview" />
+            <div class="eldorado-image-actions">
+              <button type="button" id="edEditCard" class="secondary-btn">Edit card</button>
+              <button type="button" id="edPickFile" class="secondary-btn">Use a file instead</button>
+              <button type="button" id="edAutoCard" class="secondary-btn hidden">Back to auto card</button>
+              <input type="file" id="edImageFile" accept="image/png,image/jpeg,image/webp" hidden />
+            </div>
+          </div>
         </div>
         <div id="edAttributes" class="eldorado-attrs"></div>
         <div id="edNumeric" class="eldorado-attrs eldorado-numeric"></div>

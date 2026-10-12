@@ -74,7 +74,7 @@ Browser  →  Local Express server  →  Cloudflare Worker proxy  →  Anthropic
 
 ## Publishing to Eldorado (optional)
 
-With Eldorado seller API credentials in `.env`, a **Publish to Eldorado** button appears under the description. It creates the listing as an OSRS account offer and pauses it straight away, so nothing goes live without pictures.
+With Eldorado seller API credentials in `.env`, a **Publish to Eldorado** button appears under the description. It builds the listing card, uploads it as the offer's main image, creates the listing as an OSRS account offer, and pauses it straight away so you can check it before it goes live.
 
 1. On Eldorado, open **Dashboard → Seller API** and generate credentials. The client secret is shown only once.
 2. Add them to `.env` and restart the app:
@@ -84,7 +84,8 @@ With Eldorado seller API credentials in `.env`, a **Publish to Eldorado** button
    ```
 3. After generating a listing, click **Publish to Eldorado** and enter a **price**. Everything else is filled in from the listing: type, login method, and the exact total level, combat level, quest points and pet count (from the hiscores, the model's read of the screenshots, or combat worked out from visible skill levels), which set Eldorado's brackets. Typing an exact number updates its bracket. Fields outlined in amber are best guesses (Regular, 0-99 QP, 0 pets) because nothing in the listing said otherwise; red ones still need picking.
 4. Fill in the delivery details (account login and password, email, additional info) for **Instant** delivery: Eldorado treats Instant as automatic delivery and refuses it without them. To deliver by hand instead, leave them empty and pick a delivery time of 20 minutes or longer. They go straight to Eldorado, are never written to disk, and are wiped when the dialog closes. Additional info starts as the buyer handover message.
-5. Click **Create offer (paused)**, then add the images on Eldorado and resume the offer there. The seller API has no image upload.
+5. The **Main image** is the listing card, built automatically from your screenshots (redacted ones as redacted) with the price on it. **Edit card** opens the card builder (**Use this card** hands it back); **Use a file instead** picks any image. Eldorado requires a main image.
+6. Click **Create offer (paused)**, check the offer on Eldorado (add more images if you like), then resume it there. Images go through the same upload endpoint Eldorado's own sell form uses; it is not part of the documented seller API, so if Eldorado changes it the dialog shows the upload error.
 
 There is no Eldorado sandbox: every publish creates a real offer on your account.
 

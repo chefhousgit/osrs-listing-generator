@@ -1283,6 +1283,34 @@ html, body {
   width: 100%;
 }
 
+.eldorado-image {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.eldorado-image img {
+  width: 260px;
+  max-width: 100%;
+  min-height: 60px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-2);
+  object-fit: contain;
+}
+
+.eldorado-image-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Card builder opened from the publish dialog sits above it. */
+.redact-modal.card-on-top {
+  z-index: 70;
+}
+
 .eldorado-section {
   margin: 6px 0 0;
   font-size: 0.95rem;
