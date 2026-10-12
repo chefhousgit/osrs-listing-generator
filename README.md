@@ -53,7 +53,7 @@ Browser  →  Local Express server  →  Cloudflare Worker proxy  →  Anthropic
 
 ## How to use
 
-0. Optional, with `ACCOUNTS_DIR` set (see **Account folders** below): pick the account under **Account folder** at the top. It loads that folder's screenshots and fills in the account name, account type and ban history for you.
+0. Optional, with `ACCOUNTS_DIR` set (see **Account folders** below): pick the account under **Account folder** at the top. It loads that folder's screenshots, fills in the account name, account type and ban history, and opens the card builder so you can redact the skills and overview screenshots straight away (step 4). Click **Done**, then Generate.
 1. Optionally type the OSRS account name. Skill levels are then pulled from the official hiscores and trusted over the screenshots. The name is never shown in the listing.
 2. Drag screenshots onto the drop zone, or click to browse. Any combination works: stats panel, bank, gear, quest log, achievements, overview page, collection log, clue scroll progress, etc.
 3. Pick the options that apply:
@@ -69,7 +69,7 @@ Browser  →  Local Express server  →  Cloudflare Worker proxy  →  Anthropic
 5. Click **Generate Listings**.
 6. Copy the **Title** and the **Description** (editable before copying). With Eldorado set up, these live in the **Publish to Eldorado** panel instead (see below). The description is a fixed sentence (`Great foundation for a main account / an ironman account / a hardcore ironman account / an ultimate ironman account with many skills trained and resources banked.`, using the forced or detected account type) followed by the fixed footer: handover details (per login method) and terms and conditions. The same footer is used for every account type.
 7. Under the description, **Images to upload with the listing** shows each screenshot as the model saw it, with a **Save image** button.
-8. Optionally click **Build listing card** (next to Generate; works as soon as screenshots are uploaded) to combine them into one OSRS-style framed image: stone border, afkVault logo next to the title, yellow tags, optional "Member till" date and price, your chosen screenshots side by side (up to 3, redacted ones pre-selected and used as redacted), and a faded afkVault watermark over the panel. Opacity slider and tags are remembered in your browser. **Save image** downloads the PNG.
+8. **Only redacted screenshots can go on the listing card**, so an unredacted skills or overview shot never ends up in a listing image. In the card builder, unredacted screenshots show a **Redact** button instead of a tick box; redacting one puts it on the card. Click **Build listing card** (next to Generate; works as soon as screenshots are uploaded) to combine them into one OSRS-style framed image: stone border, afkVault logo next to the title, yellow tags, optional "Member till" date and price, your chosen screenshots side by side (up to 3, redacted ones pre-selected and used as redacted), and a faded afkVault watermark over the panel. Opacity slider and tags are remembered in your browser. **Save image** downloads the PNG.
 9. After the sale, open **Buyer handover message** (under the option pills), paste the 2FA secret key, and hit **Copy message**. The RSN fills in from the account name box.
 10. Hit **Clear** to reset and run another account.
 
@@ -86,7 +86,7 @@ ACCOUNTS_DIR=C:\Users\you\Desktop\Accounts
   - `temp`: the account had a temporary ban, so Ban history is set to **Had a ban before**.
   - Examples: `Zezima`, `Zezima - hc`, `Zezima - hc - temp`.
 - **Inside each folder**: the screenshots (png / jpg / webp, loaded in file-name order) and one `.txt` file with an `email:password:key` line. Any name works (for example an EternalFarms `accounts-export-....txt`); the first valid line is used.
-- Picking a folder in **Account folder** clears the page, loads the screenshots, and sets the account name, type and ban history. After Generate, the publish panel fills the login, password and 2FA key from that `.txt` file (the key also goes into the buyer handover message).
+- Picking a folder in **Account folder** clears the page, loads the screenshots (unredacted), sets the account name, type and ban history, and opens the card builder: hit **Redact** on the skills and overview screenshots, then **Done**, then Generate. Redacting before Generate means the model never sees the hidden skills. After Generate, the publish panel fills the login, password and 2FA key from that `.txt` file (the key also goes into the buyer handover message).
 - After a successful publish the folder is moved to `ACCOUNTS_DIR\Listed\` (with ` (2)` added if the name is taken), so the picker only shows accounts still to list. **Reload** re-reads the main folder.
 
 ## Publishing to Eldorado (optional)

@@ -1,6 +1,10 @@
-// Listing card builder. Exposes window.openCardTool({ files, isRedacted, title, loginMethod, price, onUse })
-// and window.buildListingCard({ files, isRedacted, title, loginMethod, price }) -> Promise<Blob>, which
-// renders the default card without opening the modal (used by Publish to Eldorado).
+// Listing card builder. Exposes window.openCardTool({ files, isRedacted, title, loginMethod, price,
+// onUse, onRedact, prep }), window.cardFilesChanged(files) (call after a redaction while it is open)
+// and window.buildListingCard({ files, isRedacted, title, loginMethod, price }) -> Promise<Blob|null>,
+// which renders the default card without opening the modal (used by Publish to Eldorado).
+//
+// Only REDACTED screenshots can go on the card, so an unredacted skills or overview shot never
+// ends up in a listing image. Unredacted ones show a Redact button (onRedact) instead of a tick box.
 //
 // Draws an OSRS-style framed card (stone border, dark panel, header, screenshots
 // side by side, price) on a canvas, with the afkVault logo in the header and as a
@@ -296,8 +300,10 @@
       ctx.restore();
     }
 
-    noteEl.textContent = imgs.length ? '' : 'Tick at least one screenshot to put on the card.';
-    saveBtn.disabled = !imgs.length;
+    noteEl.textContent = imgs.length ? ''
+      : entries.some((e) => e.redacted) ? 'Tick at least one screenshot to put on the card.'
+        : 'Redact the skills and overview screenshots to put them on the card.';
+    saveBtn.disabled = !imgs.length && !prepMode;
   }
 
   function queueRender() {
@@ -311,7 +317,27 @@
     imagePicker.innerHTML = '';
     entries.forEach((e, idx) => {
       const label = document.createElement('label');
-      label.className = 'card-pick' + (e.checked ? ' on' : '');
+      label.className = 'card-pick' + (e.checked ? ' on' : '') + (e.redacted ? '' : ' unredacted');
+      const thumb = document.createElement('img');
+      thumb.src = e.url;
+      thumb.alt = 'Screenshot ' + (idx + 1);
+      const cap = document.createElement('span');
+      cap.textContent = (idx + 1) + '. ' + (e.redacted ? 'Redacted' : 'Not redacted');
+      if (!e.redacted) {
+        // Never on the card as-is: redact first.
+        if (onRedact) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'secondary-btn card-redact-btn';
+          btn.textContent = 'Redact';
+          btn.addEventListener('click', (ev) => { ev.preventDefault(); onRedact(e.file); });
+          label.appendChild(btn);
+        }
+        label.appendChild(thumb);
+        label.appendChild(cap);
+        imagePicker.appendChild(label);
+        return;
+      }
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.checked = e.checked;
@@ -326,11 +352,6 @@
         label.classList.toggle('on', e.checked);
         queueRender();
       });
-      const thumb = document.createElement('img');
-      thumb.src = e.url;
-      thumb.alt = 'Screenshot ' + (idx + 1);
-      const cap = document.createElement('span');
-      cap.textContent = (idx + 1) + '. ' + (e.redacted ? 'Redacted' : 'Original');
       label.appendChild(cb);
       label.appendChild(thumb);
       label.appendChild(cap);
@@ -352,23 +373,31 @@
     return first.replace(/[\p{Extended_Pictographic}️]/gu, '').replace(/\s+/g, ' ').trim();
   }
 
-  let onUse = null; // set when opened from the Eldorado panel: Save hands the card back instead
+  let onUse = null;     // set when opened from the Eldorado panel: Save hands the card back instead
+  let onRedact = null;  // (file) => opens the redact tool for an unredacted screenshot
+  let prepMode = false; // opened right after loading an account folder: the button just says Done
+  let lastOpts = null;  // open options, reused when the screenshots change
 
   // Load screenshots and fill the inputs with the defaults (remembered prefs + auto tags).
-  async function prepare({ files, isRedacted, title, loginMethod, price }) {
-    releaseEntries();
-    await Promise.all([ensureLogo().catch(() => null), ensureFont()]);
-
+  async function loadEntries(files, isRedacted, previouslyChecked) {
     const loaded = await Promise.all(files.map(async (file) => {
       const url = URL.createObjectURL(file);
       const img = await loadImage(url);
       return { file, img, url, redacted: !!isRedacted(file), checked: false };
     }));
+    releaseEntries();
     entries = loaded;
-    // Default: every redacted screenshot (up to the max); if none, the first one.
+    // Ticked: redacted shots that were ticked before, then any other redacted shot, up to the max.
     let n = 0;
-    entries.forEach((e) => { if (e.redacted && n < MAX_IMAGES) { e.checked = true; n++; } });
-    if (n === 0 && entries.length) entries[0].checked = true;
+    entries.forEach((e) => {
+      if (e.redacted && previouslyChecked && previouslyChecked.has(e.file) && n < MAX_IMAGES) { e.checked = true; n++; }
+    });
+    entries.forEach((e) => { if (e.redacted && !e.checked && n < MAX_IMAGES) { e.checked = true; n++; } });
+  }
+
+  async function prepare({ files, isRedacted, title, loginMethod, price }) {
+    await Promise.all([ensureLogo().catch(() => null), ensureFont()]);
+    await loadEntries(files, isRedacted, null);
 
     const prefs = loadPrefs();
     titleInput.value = cleanTitle(title);
@@ -382,8 +411,11 @@
   }
 
   window.openCardTool = async function (opts) {
+    lastOpts = opts;
     onUse = typeof opts.onUse === 'function' ? opts.onUse : null;
-    saveBtn.textContent = onUse ? 'Use this card' : 'Save image';
+    onRedact = typeof opts.onRedact === 'function' ? opts.onRedact : null;
+    prepMode = Boolean(opts.prep);
+    saveBtn.textContent = prepMode ? 'Done' : onUse ? 'Use this card' : 'Save image';
     modal.classList.remove('hidden');
     noteEl.textContent = 'Loading...';
     await prepare(opts);
@@ -391,9 +423,23 @@
     render();
   };
 
+  // A redaction changed the screenshots while the builder is open: reload them, keep the inputs.
+  window.cardFilesChanged = async function (files) {
+    if (modal.classList.contains('hidden') || !lastOpts) return;
+    const checkedFiles = new Set(entries.filter((e) => e.checked).map((e) => e.file));
+    await loadEntries(files, lastOpts.isRedacted, checkedFiles);
+    buildPicker();
+    render();
+  };
+
+  // Default card for Publish to Eldorado. null when no screenshot is redacted yet.
   window.buildListingCard = async function (opts) {
     if (!modal.classList.contains('hidden')) throw new Error('Card builder is open.');
     await prepare(opts);
+    if (!entries.some((e) => e.checked)) {
+      releaseEntries();
+      return null;
+    }
     render();
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
     releaseEntries();
@@ -405,13 +451,19 @@
     modal.classList.add('hidden');
     releaseEntries();
     onUse = null;
+    onRedact = null;
+    prepMode = false;
+    lastOpts = null;
   }
+
+  const redactOpen = () => !document.getElementById('redactModal').classList.contains('hidden');
 
   closeBtn.addEventListener('click', close);
   modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !modal.classList.contains('hidden')) close();
-  });
+    // The redact tool opened from here sits on top and handles its own Escape.
+    if (e.key === 'Escape' && !modal.classList.contains('hidden') && !redactOpen()) close();
+  }, true); // capture: runs before the redact tool closes itself
 
   [titleInput, tagsInput, dateInput, priceInput].forEach((el) => el.addEventListener('input', queueRender));
   tagsInput.addEventListener('change', savePrefs);
@@ -423,6 +475,10 @@
   headerLogoInput.addEventListener('change', () => { savePrefs(); queueRender(); });
 
   saveBtn.addEventListener('click', () => {
+    if (prepMode) {
+      close();
+      return;
+    }
     canvas.toBlob((blob) => {
       if (!blob) return;
       if (onUse) {

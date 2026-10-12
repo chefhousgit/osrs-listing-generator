@@ -255,6 +255,29 @@ function openRedactFor(idx) {
       redactions.set(newFile, { original, state: newState });
     }
     refreshPreviews();
+    // The card builder may be open underneath (redacting from the card): show the new version.
+    if (window.cardFilesChanged) window.cardFilesChanged(selectedFiles.slice());
+    if (window.refreshEldoradoCard) window.refreshEldoradoCard();
+  });
+}
+
+// Redact a screenshot by file (used by the card builder's Redact buttons).
+function redactFile(file) {
+  const idx = selectedFiles.indexOf(file);
+  if (idx >= 0) openRedactFor(idx);
+}
+window.redactFile = redactFile;
+
+// Card builder right after an account folder loads: redact the skills and overview screenshots
+// here, before Generate, so the model never sees hidden skills. Only redacted shots go on a card.
+function openCardForRedaction() {
+  window.openCardTool({
+    files: selectedFiles.slice(),
+    isRedacted: (file) => redactions.has(file),
+    title: '',
+    loginMethod,
+    onRedact: redactFile,
+    prep: true
   });
 }
 
@@ -352,7 +375,8 @@ cardBtn.addEventListener('click', () => {
     files: selectedFiles.slice(),
     isRedacted: (file) => redactions.has(file),
     title: resultsSection.classList.contains('hidden') ? '' : (titleEl && titleEl.textContent) || '',
-    loginMethod
+    loginMethod,
+    onRedact: redactFile
   });
 });
 
@@ -834,6 +858,7 @@ folderPick.addEventListener('change', async () => {
     addFiles(files);
     const typeText = folder.type === 'auto' ? 'type: Auto' : 'type: ' + folder.type.toUpperCase();
     folderHint.textContent = `${files.length} screenshot${files.length === 1 ? '' : 's'}, ${typeText}${folder.tempBan ? ', had a temp ban' : ''}${folder.hasLogin ? ', login file found' : ', no login file'}.`;
+    if (files.length) openCardForRedaction();
   } catch (e) {
     folderHint.textContent = 'Could not load the screenshots: ' + e.message;
   }

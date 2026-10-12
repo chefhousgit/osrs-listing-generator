@@ -222,9 +222,11 @@
   }
 
   function cardOptions() {
+    // Current screenshots, not the snapshot from Generate, so later redactions count.
+    const now = (window.getListingContext && window.getListingContext()) || ctx;
     return {
-      files: ctx.files,
-      isRedacted: ctx.isRedacted,
+      files: now.files,
+      isRedacted: now.isRedacted,
       title: ctx.title,
       loginMethod: ctx.loginMethod,
       price: priceInput.value.trim()
@@ -241,7 +243,14 @@
     }
     try {
       const blob = await window.buildListingCard(cardOptions());
-      if (!mainImage || mainImage.source === 'auto') setMainImage(blob, 'auto');
+      if (mainImage && mainImage.source !== 'auto') return;
+      if (!blob) {
+        // Only redacted screenshots go on a card.
+        setMainImage(null);
+        imageSourceEl.textContent = '(nothing redacted yet: use Edit card to redact the skills and overview screenshots)';
+        return;
+      }
+      setMainImage(blob, 'auto');
     } catch (err) {
       imageSourceEl.textContent = '(could not build the card: ' + err.message + ')';
     }
@@ -255,7 +264,10 @@
   priceInput.addEventListener('input', queueAutoCard);
   editCardBtn.addEventListener('click', () => {
     if (!ctx || !ctx.files.length) return;
-    window.openCardTool(Object.assign(cardOptions(), { onUse: (blob) => setMainImage(blob, 'edited') }));
+    window.openCardTool(Object.assign(cardOptions(), {
+      onUse: (blob) => setMainImage(blob, 'edited'),
+      onRedact: window.redactFile
+    }));
   });
   pickFileBtn.addEventListener('click', () => imageFileInput.click());
   imageFileInput.addEventListener('change', () => {
@@ -398,6 +410,7 @@
   }
 
   window.fillEldoradoPanel = fill;
+  window.refreshEldoradoCard = queueAutoCard; // a screenshot was redacted after Generate
   window.resetEldoradoPanel = reset;
 
   fetch('/eldorado/config')

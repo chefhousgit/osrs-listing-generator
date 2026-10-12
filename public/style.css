@@ -1211,6 +1211,31 @@ html, body {
   background: #000;
 }
 
+/* Unredacted: can't go on the card, only be redacted. */
+.card-pick.unredacted {
+  cursor: default;
+  border-style: dashed;
+}
+
+.card-pick.unredacted img {
+  opacity: 0.45;
+}
+
+.card-redact-btn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -70%);
+  z-index: 1;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+}
+
+/* The redact tool can be opened from the card builder, so it sits above it. */
+#redactModal {
+  z-index: 70;
+}
+
 .card-check {
   display: flex;
   align-items: center;
