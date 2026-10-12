@@ -21,7 +21,7 @@
     .map((id) => document.getElementById(id));
 
   const DELIVERY_LABELS = {
-    Instant: 'Instant', Minute20: '20 minutes', Hour1: '1 hour', Hour5: '5 hours', Hour12: '12 hours', Day1: '1 day'
+    Instant: 'Instant (auto, needs login)', Minute20: '20 minutes', Hour1: '1 hour', Hour5: '5 hours', Hour12: '12 hours', Day1: '1 day'
   };
   // Lister account type -> Eldorado osrs-account-type value.
   const TYPE_MAP = { main: 'regular', ironman: 'ironman', hcim: 'hcim', uim: 'uim' };

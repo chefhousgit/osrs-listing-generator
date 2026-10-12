@@ -83,7 +83,7 @@ With Eldorado seller API credentials in `.env`, a **Publish to Eldorado** button
    ELDORADO_CLIENT_SECRET=...
    ```
 3. After generating a listing, click **Publish to Eldorado** and enter a **price**. Everything else is filled in from the listing: type, login method, and the exact total level, combat level, quest points and pet count (from the hiscores, the model's read of the screenshots, or combat worked out from visible skill levels), which set Eldorado's brackets. Typing an exact number updates its bracket. Fields outlined in amber are best guesses (Regular, 0-99 QP, 0 pets) because nothing in the listing said otherwise; red ones still need picking.
-4. Optionally fill in the delivery details (account login and password, email, additional info) for instant delivery. They go straight to Eldorado, are never written to disk, and are wiped when the dialog closes. Additional info starts as the buyer handover message.
+4. Fill in the delivery details (account login and password, email, additional info) for **Instant** delivery: Eldorado treats Instant as automatic delivery and refuses it without them. To deliver by hand instead, leave them empty and pick a delivery time of 20 minutes or longer. They go straight to Eldorado, are never written to disk, and are wiped when the dialog closes. Additional info starts as the buyer handover message.
 5. Click **Create offer (paused)**, then add the images on Eldorado and resume the offer there. The seller API has no image upload.
 
 There is no Eldorado sandbox: every publish creates a real offer on your account.

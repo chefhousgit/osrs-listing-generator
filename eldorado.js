@@ -131,6 +131,10 @@ function buildAccountOffer(input) {
   if (hasDelivery && (!delivery.accountLogin || !delivery.accountPassword)) {
     bad('Account login and password are both needed when adding delivery details.');
   }
+  // Eldorado treats Instant as automatic delivery and refuses it without the account details.
+  if (deliveryTime === 'Instant' && !hasDelivery) {
+    bad('Instant delivery needs the account login and password. Fill them in, or pick a manual delivery time (20 minutes or longer).');
+  }
 
   return {
     details: {
