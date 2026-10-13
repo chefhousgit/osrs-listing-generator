@@ -34,7 +34,12 @@ async function getToken(env) {
 
 async function getJson(token, path) {
   const res = await fetch(ELDORADO + path, { headers: { Authorization: 'Bearer ' + token } });
-  if (!res.ok) throw new Error(`GET ${path.split('?')[0]} failed (${res.status})`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    let detail = body.slice(0, 300);
+    try { const j = JSON.parse(body); if (j.messages) detail = j.messages.join(' '); } catch (e) { /* not JSON */ }
+    throw new Error(`GET ${path.split('?')[0]} failed (${res.status})${detail ? ': ' + detail : ''}`);
+  }
   return res.json();
 }
 
@@ -43,13 +48,16 @@ function getOrders(token, pageSize) {
     .then((d) => d.results || []);
 }
 
-// All account offers (active and paused), every page.
+// All account offers (active and paused), every page. The first request has no page number
+// (same as Eldorado's own dashboard); later pages continue from the index it reports.
 async function getOffers(token) {
-  const all = [];
-  for (let page = 1; page <= 20; page++) {
-    const d = await getJson(token, `/api/flexibleOffers/me/search?category=Account&pageSize=100&pageIndex=${page}`);
+  const base = '/api/flexibleOffers/me/search?category=Account&pageSize=50';
+  const first = await getJson(token, base);
+  const all = [...(first.results || [])];
+  const start = Number(first.pageIndex) || 0;
+  for (let n = 1; n < Math.min(Number(first.totalPages) || 1, 20); n++) {
+    const d = await getJson(token, `${base}&pageIndex=${start + n}`);
     all.push(...(d.results || []));
-    if (!d.totalPages || page >= d.totalPages) break;
   }
   return all;
 }
@@ -207,9 +215,22 @@ export async function runAlerts(env, { forceSummary = false } = {}) {
     return { ok: false, error: 'auth: ' + err.message };
   }
 
-  await checkOrders(env, token);
-  const offers = await getOffers(token);
-  const firstSeen = await trackOffers(env, offers);
+  const problems = [];
+  try {
+    await checkOrders(env, token);
+  } catch (err) {
+    problems.push('orders: ' + err.message);
+    await alertOnce(env, 'orders', 'Could not check your Eldorado orders: ' + err.message);
+  }
+  let offers = [];
+  let firstSeen = {};
+  try {
+    offers = await getOffers(token);
+    firstSeen = await trackOffers(env, offers);
+  } catch (err) {
+    problems.push('offers: ' + err.message);
+    await alertOnce(env, 'offers', 'Could not read your Eldorado offers (stock and stale listings in the summary): ' + err.message);
+  }
 
   const days = credentialDaysLeft(env);
   if (days !== null && days <= 7) {
@@ -225,5 +246,35 @@ export async function runAlerts(env, { forceSummary = false } = {}) {
     await sendSummary(env, token, offers, firstSeen);
     if (!forceSummary) await env.STATE.put('summaryDay', local.day);
   }
-  return { ok: true, offers: offers.length };
+  return { ok: problems.length === 0, offers: offers.length, problems };
+}
+
+// ---------- test posts: one sample message to each Worker webhook ----------
+export async function sendTests(env) {
+  const sample = {
+    id: 'test-order-0000',
+    state: { state: 'Paid' },
+    createdDate: new Date().toISOString(),
+    totalPrice: { amount: 49.99, currency: 'USD' },
+    orderOfferDetails: { offerTitle: 'TEST 1007 Total Level HCIM' },
+    latestDispute: { reason: 'Items_Missing_From_Account' }
+  };
+  const sent = [];
+  if (env.DISCORD_WEBHOOK_SALES) {
+    await post(env.DISCORD_WEBHOOK_SALES, { content: 'Test message, ignore.', embeds: [orderEmbed(sample, '💰 Sold', COLORS.sale, 'Hand over the account, then mark the order delivered.')] });
+    await post(env.DISCORD_WEBHOOK_SALES, { content: 'Test message, ignore (a real dispute pings @here).', embeds: [orderEmbed({ ...sample, state: { state: 'Disputed' } }, '🚨 Dispute opened (Items Missing From Account)', COLORS.dispute, 'Reply on Eldorado.')] });
+    sent.push('sales');
+  }
+  if (env.DISCORD_WEBHOOK_SUMMARY) {
+    await post(env.DISCORD_WEBHOOK_SUMMARY, { content: 'Test message, ignore.', embeds: [{ title: '📊 Daily summary (test)', color: COLORS.summary, fields: [
+      { name: 'Listed (24h)', value: '3', inline: true }, { name: 'Sold (24h)', value: '2', inline: true }, { name: 'Revenue (24h)', value: '$95.00', inline: true },
+      { name: 'In stock', value: '12 active · 1 paused' }, { name: 'Listed 14+ days, no sale (1)', value: '• Example account ($60.00, 16d)' }
+    ], timestamp: new Date().toISOString() }] });
+    sent.push('summary');
+  }
+  if (env.DISCORD_WEBHOOK_ALERTS) {
+    await post(env.DISCORD_WEBHOOK_ALERTS, { content: 'Test message, ignore.', embeds: [{ title: '⚠️ Listing alert (test)', description: 'This is where credential and Eldorado problems from the 24/7 checks show up.', color: COLORS.alert }] });
+    sent.push('alerts');
+  }
+  return { ok: true, sent };
 }

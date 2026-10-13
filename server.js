@@ -763,6 +763,14 @@ app.get('/folders/:name/login', async (req, res) => {
   }
 });
 
+// One sample message to each Discord webhook set in .env (open in the browser to test).
+app.get('/discord/test', async (req, res) => {
+  const sent = await discord.sendTests();
+  res.type('text').send(sent.length
+    ? 'Sent a test message to: ' + sent.join(', ') + '. Check Discord.'
+    : 'No DISCORD_WEBHOOK_LISTED / DISCORD_WEBHOOK_ALERTS in .env on this PC.');
+});
+
 app.get('/eldorado/config', (req, res) => {
   res.json({
     configured: eldorado.isConfigured(),

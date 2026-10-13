@@ -66,4 +66,34 @@ function alert(title, description, urgent) {
   });
 }
 
-module.exports = { listed, alert };
+// One sample message to each of the app's webhooks (GET /discord/test).
+async function sendTests() {
+  const sent = [];
+  if (process.env.DISCORD_WEBHOOK_LISTED) {
+    await post(process.env.DISCORD_WEBHOOK_LISTED, {
+      content: 'Test message, ignore.',
+      embeds: [{
+        title: '🆕 Listed: TEST 1007 Total Level Hardcore Ironman',
+        color: COLORS.listed,
+        fields: [
+          { name: 'Type', value: 'HCIM', inline: true }, { name: 'Total level', value: '1007', inline: true },
+          { name: 'Price', value: '$49.99', inline: true }, { name: 'Delivery', value: 'Instant', inline: true },
+          { name: 'Images', value: 'card + 1 more', inline: true }, { name: 'State', value: 'Paused: resume it on Eldorado', inline: true },
+          { name: 'Offer', value: '`test-offer-0000`' }
+        ],
+        timestamp: new Date().toISOString()
+      }]
+    });
+    sent.push('listed');
+  }
+  if (process.env.DISCORD_WEBHOOK_ALERTS) {
+    await post(process.env.DISCORD_WEBHOOK_ALERTS, {
+      content: 'Test message, ignore.',
+      embeds: [{ title: '⚠️ Publish failed (test)', description: 'This is where problems from the app show up (publish failures, offers left live, folders not moved).', color: COLORS.alert }]
+    });
+    sent.push('alerts');
+  }
+  return sent;
+}
+
+module.exports = { listed, alert, sendTests };

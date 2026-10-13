@@ -1,4 +1,4 @@
-import { runAlerts } from './alerts.js';
+import { runAlerts, sendTests } from './alerts.js';
 
 export default {
   async fetch(request, env) {
@@ -14,9 +14,16 @@ export default {
     const url = new URL(request.url);
 
     // Manual run of the Discord alerts (same as the cron), ?summary=1 also sends the daily summary.
-    if (url.pathname === "/alerts/run") {
-      const result = await runAlerts(env, { forceSummary: url.searchParams.get("summary") === "1" });
-      return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
+    // /alerts/test posts one sample message to each webhook.
+    if (url.pathname === "/alerts/run" || url.pathname === "/alerts/test") {
+      try {
+        const result = url.pathname === "/alerts/test"
+          ? await sendTests(env)
+          : await runAlerts(env, { forceSummary: url.searchParams.get("summary") === "1" });
+        return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
+      } catch (err) {
+        return new Response(JSON.stringify({ ok: false, error: err.message }), { status: 500, headers: { "Content-Type": "application/json" } });
+      }
     }
 
     if (url.pathname !== "/generate") {
