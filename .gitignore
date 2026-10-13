@@ -12,3 +12,7 @@ docs/eldorado-seller-swagger.json
 # Account credential files, in case one is kept in the project folder
 accounts*.txt
 login*.txt
+
+# Same file saved without the leading dot
+env
+*.env
