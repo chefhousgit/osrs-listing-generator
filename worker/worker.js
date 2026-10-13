@@ -1,3 +1,5 @@
+import { runAlerts } from './alerts.js';
+
 export default {
   async fetch(request, env) {
     if (request.method !== "POST") {
@@ -10,6 +12,13 @@ export default {
     }
 
     const url = new URL(request.url);
+
+    // Manual run of the Discord alerts (same as the cron), ?summary=1 also sends the daily summary.
+    if (url.pathname === "/alerts/run") {
+      const result = await runAlerts(env, { forceSummary: url.searchParams.get("summary") === "1" });
+      return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
+    }
+
     if (url.pathname !== "/generate") {
       return new Response("Not found", { status: 404 });
     }
@@ -31,5 +40,10 @@ export default {
       status: anthropicResponse.status,
       headers: { "Content-Type": "application/json" }
     });
+  },
+
+  // Cron trigger (wrangler.toml): Eldorado orders -> Discord alerts, plus the daily summary.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runAlerts(env));
   }
 };

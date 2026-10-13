@@ -1,3 +1,26 @@
 name = "houbies-osrs-generator"
 main = "worker.js"
 compatibility_date = "2024-01-01"
+
+# Discord alerts (alerts.js): check Eldorado every 5 minutes, 24/7.
+[triggers]
+crons = ["*/5 * * * *"]
+
+# Remembers announced orders and when each offer was first seen.
+# Create it once with:  npx wrangler kv namespace create STATE
+# and paste the id it prints here.
+[[kv_namespaces]]
+binding = "STATE"
+id = "PASTE_KV_NAMESPACE_ID_HERE"
+
+[vars]
+# Daily summary goes out at this hour (24h clock) in this time zone.
+TIMEZONE = "America/New_York"
+SUMMARY_HOUR = "21"
+# Expiry date of your Eldorado API credentials (YYYY-MM-DD), for the heads-up before they stop working.
+ELDORADO_CREDS_EXPIRE = ""
+
+# Secrets (never in this file), set each with:  npx wrangler secret put NAME
+#   PROXY_SECRET, ANTHROPIC_API_KEY            (already set for the listing generator)
+#   ELDORADO_CLIENT_ID, ELDORADO_CLIENT_SECRET
+#   DISCORD_WEBHOOK_SALES, DISCORD_WEBHOOK_SUMMARY, DISCORD_WEBHOOK_ALERTS

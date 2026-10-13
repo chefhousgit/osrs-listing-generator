@@ -109,6 +109,41 @@ There is no Eldorado sandbox: every publish creates a real offer on your account
 
 The app only uses information visible in your screenshots or returned by the hiscores. Numbers are reported exactly or omitted; nothing is rounded up or invented. If a number looks off, open the **Debug** panel under the listing to see what the model claims to have read.
 
+## Discord alerts (optional)
+
+Four channels, one webhook each (channel settings > Integrations > Webhooks > New Webhook > Copy Webhook URL):
+
+| Channel | What | Sent by |
+|---|---|---|
+| `#listed` | Every offer the app creates, with the listing card, type, total level, price, delivery and offer ID | the app, while it runs |
+| `#alerts` | Publish failed, offer left live (@here), folder not moved, no login details sent; Eldorado rejecting the API credentials or credentials about to expire | the app and the Worker |
+| `#sales` | New orders, disputes (@here), cancellations, completed orders | the Worker, 24/7 |
+| `#summary` | Once a day: listed / sold / revenue in the last 24h, stock, accounts listed 14+ days with no sale | the Worker, 24/7 |
+
+No login details, 2FA keys or buyer information are ever posted.
+
+**App side**: add to `.env` and restart:
+```
+DISCORD_WEBHOOK_LISTED=https://discord.com/api/webhooks/...
+DISCORD_WEBHOOK_ALERTS=https://discord.com/api/webhooks/...
+```
+
+**Worker side (24/7)**: the Cloudflare Worker checks Eldorado every 5 minutes. From the `worker` folder:
+1. `npx wrangler login` (opens the browser to log in to Cloudflare).
+2. `npx wrangler kv namespace create STATE`, then paste the `id` it prints into `wrangler.toml` (replacing `PASTE_KV_NAMESPACE_ID_HERE`).
+3. In `wrangler.toml`, set `TIMEZONE` (e.g. `Europe/London`), `SUMMARY_HOUR` (24h) and `ELDORADO_CREDS_EXPIRE` (the expiry date shown on the Seller API page, `YYYY-MM-DD`).
+4. Set the secrets; each command asks you to paste the value:
+   ```
+   npx wrangler secret put ELDORADO_CLIENT_ID
+   npx wrangler secret put ELDORADO_CLIENT_SECRET
+   npx wrangler secret put DISCORD_WEBHOOK_SALES
+   npx wrangler secret put DISCORD_WEBHOOK_SUMMARY
+   npx wrangler secret put DISCORD_WEBHOOK_ALERTS
+   ```
+5. `npx wrangler deploy`.
+
+The first run only remembers the orders and offers that already exist (no flood of old sales). To test without waiting, send a POST to `<worker url>/alerts/run?summary=1` with the `X-Proxy-Secret` header: it runs a check and posts the daily summary now.
+
 ## Security notes
 
 - The Anthropic API key is **never** stored on this machine. It lives only on the Cloudflare Worker as an encrypted secret.
@@ -135,6 +170,7 @@ osrs-listing-generator/
 ├── package.json
 ├── server.js              Express server: prompt, hiscores lookup, quadrant crops, footer, proxy call
 ├── eldorado.js            Eldorado seller API client: token cache, offer payload, create + pause
+├── discord.js             Discord webhooks from the app (#listed, #alerts)
 ├── folders.js             ACCOUNTS_DIR account folders: name/type/ban from the folder name, screenshots, the .txt login file, move to Listed
 ├── data/
 │   └── eldorado-osrs.json OSRS account builds and required offer attributes on Eldorado
@@ -146,7 +182,8 @@ osrs-listing-generator/
 │   ├── eldorado.js        Publish to Eldorado panel
 │   └── redact.js          Skill blackout tool (calibrated skills grid + free-hand boxes)
 ├── worker/
-│   ├── worker.js          Cloudflare Worker proxy script
+│   ├── worker.js          Cloudflare Worker: Claude proxy + cron entry point
+│   ├── alerts.js          24/7 Discord alerts from Eldorado (sales, disputes, daily summary)
 │   └── wrangler.toml      Worker deployment config
 └── README.md
 ```

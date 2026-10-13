@@ -5,6 +5,7 @@ const path = require('path');
 const sharp = require('sharp');
 const eldorado = require('./eldorado');
 const folders = require('./folders');
+const discord = require('./discord');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -777,15 +778,17 @@ app.post('/eldorado/publish', publishUpload, async (req, res) => {
   if (!eldorado.isConfigured()) {
     return res.status(500).json({ error: 'Eldorado API is not set up. Add ELDORADO_CLIENT_ID and ELDORADO_CLIENT_SECRET to .env and restart.' });
   }
+  let payload = {};
   try {
-    let payload;
     try {
       payload = JSON.parse(req.body.payload || '{}');
     } catch (e) {
       return res.status(400).json({ error: 'Bad publish request.' });
     }
     const files = req.files || {};
-    const result = await eldorado.publishPausedAccountOffer(payload, (files.mainImage || [])[0], files.extraImages || []);
+    const mainImage = (files.mainImage || [])[0];
+    const extraImages = files.extraImages || [];
+    const result = await eldorado.publishPausedAccountOffer(payload, mainImage, extraImages);
     // The offer exists now, so file the account folder away (if it came from one).
     if (payload.folder && folders.isConfigured()) {
       try {
@@ -795,9 +798,25 @@ app.post('/eldorado/publish', publishUpload, async (req, res) => {
       }
     }
     res.json(result);
+
+    // Discord, after answering so a slow webhook never holds up the page.
+    discord.listed(payload, result, mainImage, extraImages.length);
+    if (!result.paused) {
+      discord.alert('Offer is LIVE without a check', `"${payload.title}" (offer ${result.offerId}) was created but could not be paused: ${result.pauseError || 'unknown error'}. Pause it on Eldorado.`, true);
+    }
+    if (result.moveError) {
+      discord.alert('Folder not moved', `"${payload.folder}" is listed but could not be moved to Listed: ${result.moveError}`);
+    }
+    if (!result.withDelivery) {
+      discord.alert('No delivery details', `"${payload.title}" (offer ${result.offerId}) was published without login details. Add them on Eldorado before resuming it.`);
+    }
   } catch (err) {
     // Never log the request body: it can hold account passwords.
     console.error('Eldorado publish failed:', err.message);
+    // Form mistakes caught here (no price, field not picked...) have no Eldorado detail: no alert.
+    if (!(err instanceof eldorado.EldoradoError) || err.detail !== undefined) {
+      discord.alert('Publish failed', `"${payload.title || payload.folder || 'Listing'}": ${err.message}`);
+    }
     const status = err instanceof eldorado.EldoradoError && err.status >= 400 && err.status < 600 ? err.status : 500;
     res.status(status).json({ error: err.message });
   }
