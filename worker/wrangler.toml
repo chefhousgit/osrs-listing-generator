@@ -11,7 +11,7 @@ crons = ["*/5 * * * *"]
 # and paste the id it prints here.
 [[kv_namespaces]]
 binding = "STATE"
-id = "PASTE_KV_NAMESPACE_ID_HERE"
+id = "8eefe3d441e34578bec3818c7cbbb217"
 
 [vars]
 # Daily summary goes out at this hour (24h clock) in this time zone.
