@@ -18,7 +18,7 @@ id = "8eefe3d441e34578bec3818c7cbbb217"
 TIMEZONE = "America/New_York"
 SUMMARY_HOUR = "21"
 # Expiry date of your Eldorado API credentials (YYYY-MM-DD), for the heads-up before they stop working.
-ELDORADO_CREDS_EXPIRE = ""
+ELDORADO_CREDS_EXPIRE = "2027-10-11"
 
 # Secrets (never in this file), set each with:  npx wrangler secret put NAME
 #   PROXY_SECRET, ANTHROPIC_API_KEY            (already set for the listing generator)
