@@ -307,7 +307,7 @@
       isRedacted: now.isRedacted,
       title: cardTitle(),
       loginMethod: ctx.loginMethod,
-      price: priceInput.value.trim()
+      price: '' // no price on the image: it changes on Eldorado, the card would go stale
     };
   }
 
@@ -323,7 +323,7 @@
     return type || ctx.title;
   }
 
-  // Build the default card (price included) unless the user edited it or picked a file.
+  // Build the default card unless the user edited it or picked a file.
   async function refreshAutoCard() {
     if (!ctx || (mainImage && mainImage.source !== 'auto')) return;
     if (!ctx.files.length) {
@@ -351,7 +351,6 @@
     cardTimer = setTimeout(refreshAutoCard, 400);
   }
 
-  priceInput.addEventListener('input', queueAutoCard);
   editCardBtn.addEventListener('click', () => {
     if (!ctx || !ctx.files.length) return;
     window.openCardTool(Object.assign(cardOptions(), {
@@ -549,7 +548,7 @@
     additionalInput.value = st.additional;
     originalEmailInput.checked = st.originalEmail;
     if (st.mainImage) setMainImage(st.mainImage.blob, st.mainImage.source);
-    else queueAutoCard(); // price / title may differ from the defaults
+    else queueAutoCard(); // title may differ from the defaults
     extraPicked = new Set(st.extras || []);
     renderExtras();
   };
