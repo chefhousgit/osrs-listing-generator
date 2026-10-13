@@ -1,11 +1,13 @@
 // Discord webhooks posted by the local app (the 24/7 sales / summary alerts live on the Worker,
 // see worker/alerts.js). DISCORD_WEBHOOK_LISTED gets every new offer with the listing card;
-// DISCORD_WEBHOOK_ALERTS gets publish problems. Never posts login details, keys or buyer info.
+// DISCORD_WEBHOOK_ERRORS (#errors; the old name DISCORD_WEBHOOK_ALERTS still works) gets publish
+// problems. Never posts login details, keys or buyer info.
 // Failures here are logged and swallowed: a Discord hiccup must not break publishing.
 
 const { OSRS } = require('./eldorado');
 
 const COLORS = { listed: 0xe4b04a, alert: 0xd68f3c, live: 0xd9534f };
+const errorsHook = () => process.env.DISCORD_WEBHOOK_ERRORS || process.env.DISCORD_WEBHOOK_ALERTS;
 
 async function post(url, payload, image) {
   if (!url) return;
@@ -59,7 +61,7 @@ function listed(payload, result, mainImage, extraCount) {
 }
 
 function alert(title, description, urgent) {
-  return post(process.env.DISCORD_WEBHOOK_ALERTS, {
+  return post(errorsHook(), {
     content: urgent ? '@here' : undefined,
     allowed_mentions: { parse: urgent ? ['everyone'] : [] },
     embeds: [{ title: '⚠️ ' + title, description: String(description).slice(0, 4000), color: urgent ? COLORS.live : COLORS.alert, timestamp: new Date().toISOString() }]
@@ -86,12 +88,12 @@ async function sendTests() {
     });
     sent.push('listed');
   }
-  if (process.env.DISCORD_WEBHOOK_ALERTS) {
-    await post(process.env.DISCORD_WEBHOOK_ALERTS, {
+  if (errorsHook()) {
+    await post(errorsHook(), {
       content: 'Test message, ignore.',
       embeds: [{ title: '⚠️ Publish failed (test)', description: 'This is where problems from the app show up (publish failures, offers left live, folders not moved).', color: COLORS.alert }]
     });
-    sent.push('alerts');
+    sent.push('errors');
   }
   return sent;
 }

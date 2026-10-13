@@ -4,10 +4,10 @@
 //   #disputes disputes (@here); falls back to #sales if DISCORD_WEBHOOK_DISPUTES is not set
 //   #summary  once a day at SUMMARY_HOUR in TIMEZONE: last 24h listed / sold / revenue, stock,
 //             accounts listed STALE_DAYS+ days without a sale
-//   #alerts   Eldorado rejecting the API credentials, credentials about to expire
+//   #errors   Eldorado rejecting the API credentials, credentials about to expire, failed checks
 //
 // Secrets (wrangler secret put): ELDORADO_CLIENT_ID, ELDORADO_CLIENT_SECRET, DISCORD_WEBHOOK_SALES, DISCORD_WEBHOOK_DISPUTES,
-// DISCORD_WEBHOOK_SUMMARY, DISCORD_WEBHOOK_ALERTS. Vars (wrangler.toml): TIMEZONE, SUMMARY_HOUR,
+// DISCORD_WEBHOOK_SUMMARY, DISCORD_WEBHOOK_ERRORS (old name DISCORD_WEBHOOK_ALERTS still works). Vars (wrangler.toml): TIMEZONE, SUMMARY_HOUR,
 // ELDORADO_CREDS_EXPIRE (YYYY-MM-DD, optional). KV binding STATE remembers which orders were already
 // announced and when each offer was first seen (Eldorado offers carry no creation date).
 // Nothing here posts login details, keys or buyer information.
@@ -65,6 +65,7 @@ async function getOffers(token) {
 
 // ---------- Discord ----------
 const disputesHook = (env) => env.DISCORD_WEBHOOK_DISPUTES || env.DISCORD_WEBHOOK_SALES;
+const errorsHook = (env) => env.DISCORD_WEBHOOK_ERRORS || env.DISCORD_WEBHOOK_ALERTS;
 
 async function post(url, payload) {
   if (!url) return;
@@ -101,7 +102,7 @@ async function alertOnce(env, key, text) {
   const today = new Date().toISOString().slice(0, 10);
   const flag = 'alerted:' + key;
   if ((await env.STATE.get(flag)) === today) return;
-  await post(env.DISCORD_WEBHOOK_ALERTS, { embeds: [{ title: '⚠️ Listing alert', description: text, color: COLORS.alert }] });
+  await post(errorsHook(env), { embeds: [{ title: '⚠️ Error', description: text, color: COLORS.alert }] });
   await env.STATE.put(flag, today, { expirationTtl: 2 * 24 * 3600 });
 }
 
@@ -278,9 +279,9 @@ export async function sendTests(env) {
     ], timestamp: new Date().toISOString() }] });
     sent.push('summary');
   }
-  if (env.DISCORD_WEBHOOK_ALERTS) {
-    await post(env.DISCORD_WEBHOOK_ALERTS, { content: 'Test message, ignore.', embeds: [{ title: '⚠️ Listing alert (test)', description: 'This is where credential and Eldorado problems from the 24/7 checks show up.', color: COLORS.alert }] });
-    sent.push('alerts');
+  if (errorsHook(env)) {
+    await post(errorsHook(env), { content: 'Test message, ignore.', embeds: [{ title: '⚠️ Error (test)', description: 'This is where credential and Eldorado problems from the 24/7 checks show up.', color: COLORS.alert }] });
+    sent.push('errors');
   }
   return { ok: true, sent };
 }

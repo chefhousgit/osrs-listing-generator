@@ -116,7 +116,7 @@ Five channels, one webhook each (channel settings > Integrations > Webhooks > Ne
 | Channel | What | Sent by |
 |---|---|---|
 | `#listed` | Every offer the app creates, with the listing card, type, total level, price, delivery and offer ID | the app, while it runs |
-| `#alerts` | Publish failed, offer left live (@here), folder not moved, no login details sent; Eldorado rejecting the API credentials or credentials about to expire | the app and the Worker |
+| `#errors` | Publish failed, offer left live (@here), folder not moved, no login details sent; Eldorado rejecting the API credentials or credentials about to expire | the app and the Worker |
 | `#sales` | New orders, cancellations, completed orders | the Worker, 24/7 |
 | `#disputes` | Disputes, with @here and the reason (go to `#sales` until this webhook is set) | the Worker, 24/7 |
 | `#summary` | Once a day: listed / sold / revenue in the last 24h, stock, accounts listed 14+ days with no sale | the Worker, 24/7 |
@@ -126,7 +126,7 @@ No login details, 2FA keys or buyer information are ever posted.
 **App side**: add to `.env` and restart:
 ```
 DISCORD_WEBHOOK_LISTED=https://discord.com/api/webhooks/...
-DISCORD_WEBHOOK_ALERTS=https://discord.com/api/webhooks/...
+DISCORD_WEBHOOK_ERRORS=https://discord.com/api/webhooks/...
 ```
 
 **Worker side (24/7)**: the Cloudflare Worker checks Eldorado every 5 minutes. From the `worker` folder:
@@ -140,7 +140,7 @@ DISCORD_WEBHOOK_ALERTS=https://discord.com/api/webhooks/...
    npx wrangler secret put DISCORD_WEBHOOK_SALES
    npx wrangler secret put DISCORD_WEBHOOK_DISPUTES
    npx wrangler secret put DISCORD_WEBHOOK_SUMMARY
-   npx wrangler secret put DISCORD_WEBHOOK_ALERTS
+   npx wrangler secret put DISCORD_WEBHOOK_ERRORS
    ```
 5. `npx wrangler deploy`.
 
@@ -172,7 +172,7 @@ osrs-listing-generator/
 ├── package.json
 ├── server.js              Express server: prompt, hiscores lookup, quadrant crops, footer, proxy call
 ├── eldorado.js            Eldorado seller API client: token cache, offer payload, create + pause
-├── discord.js             Discord webhooks from the app (#listed, #alerts)
+├── discord.js             Discord webhooks from the app (#listed, #errors)
 ├── folders.js             ACCOUNTS_DIR account folders: name/type/ban from the folder name, screenshots, the .txt login file, move to Listed
 ├── data/
 │   └── eldorado-osrs.json OSRS account builds and required offer attributes on Eldorado
