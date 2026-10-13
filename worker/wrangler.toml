@@ -15,8 +15,8 @@ id = "8eefe3d441e34578bec3818c7cbbb217"
 
 [vars]
 # Daily summary goes out at this hour (24h clock) in this time zone.
-TIMEZONE = "America/New_York"
-SUMMARY_HOUR = "21"
+TIMEZONE = "America/Los_Angeles"
+SUMMARY_HOUR = "19"
 # Expiry date of your Eldorado API credentials (YYYY-MM-DD), for the heads-up before they stop working.
 ELDORADO_CREDS_EXPIRE = "2027-10-11"
 
