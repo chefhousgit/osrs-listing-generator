@@ -111,13 +111,14 @@ The app only uses information visible in your screenshots or returned by the his
 
 ## Discord alerts (optional)
 
-Four channels, one webhook each (channel settings > Integrations > Webhooks > New Webhook > Copy Webhook URL):
+Five channels, one webhook each (channel settings > Integrations > Webhooks > New Webhook > Copy Webhook URL):
 
 | Channel | What | Sent by |
 |---|---|---|
 | `#listed` | Every offer the app creates, with the listing card, type, total level, price, delivery and offer ID | the app, while it runs |
 | `#alerts` | Publish failed, offer left live (@here), folder not moved, no login details sent; Eldorado rejecting the API credentials or credentials about to expire | the app and the Worker |
-| `#sales` | New orders, disputes (@here), cancellations, completed orders | the Worker, 24/7 |
+| `#sales` | New orders, cancellations, completed orders | the Worker, 24/7 |
+| `#disputes` | Disputes, with @here and the reason (go to `#sales` until this webhook is set) | the Worker, 24/7 |
 | `#summary` | Once a day: listed / sold / revenue in the last 24h, stock, accounts listed 14+ days with no sale | the Worker, 24/7 |
 
 No login details, 2FA keys or buyer information are ever posted.
@@ -137,6 +138,7 @@ DISCORD_WEBHOOK_ALERTS=https://discord.com/api/webhooks/...
    npx wrangler secret put ELDORADO_CLIENT_ID
    npx wrangler secret put ELDORADO_CLIENT_SECRET
    npx wrangler secret put DISCORD_WEBHOOK_SALES
+   npx wrangler secret put DISCORD_WEBHOOK_DISPUTES
    npx wrangler secret put DISCORD_WEBHOOK_SUMMARY
    npx wrangler secret put DISCORD_WEBHOOK_ALERTS
    ```

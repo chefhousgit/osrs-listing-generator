@@ -1,11 +1,12 @@
 // Discord alerts from Eldorado, run by the Worker's cron trigger every 5 minutes (24/7).
 //
-//   #sales    new orders, disputes (@here), cancellations, completed orders
+//   #sales    new orders, cancellations, completed orders
+//   #disputes disputes (@here); falls back to #sales if DISCORD_WEBHOOK_DISPUTES is not set
 //   #summary  once a day at SUMMARY_HOUR in TIMEZONE: last 24h listed / sold / revenue, stock,
 //             accounts listed STALE_DAYS+ days without a sale
 //   #alerts   Eldorado rejecting the API credentials, credentials about to expire
 //
-// Secrets (wrangler secret put): ELDORADO_CLIENT_ID, ELDORADO_CLIENT_SECRET, DISCORD_WEBHOOK_SALES,
+// Secrets (wrangler secret put): ELDORADO_CLIENT_ID, ELDORADO_CLIENT_SECRET, DISCORD_WEBHOOK_SALES, DISCORD_WEBHOOK_DISPUTES,
 // DISCORD_WEBHOOK_SUMMARY, DISCORD_WEBHOOK_ALERTS. Vars (wrangler.toml): TIMEZONE, SUMMARY_HOUR,
 // ELDORADO_CREDS_EXPIRE (YYYY-MM-DD, optional). KV binding STATE remembers which orders were already
 // announced and when each offer was first seen (Eldorado offers carry no creation date).
@@ -63,6 +64,8 @@ async function getOffers(token) {
 }
 
 // ---------- Discord ----------
+const disputesHook = (env) => env.DISCORD_WEBHOOK_DISPUTES || env.DISCORD_WEBHOOK_SALES;
+
 async function post(url, payload) {
   if (!url) return;
   await fetch(url, {
@@ -120,7 +123,7 @@ async function checkOrders(env, token) {
       } else if (before !== undefined && before !== state) {
         if (state === 'Disputed' || state === 'DeliveredDisputed') {
           const reason = order.latestDispute && order.latestDispute.reason ? ` (${order.latestDispute.reason.replace(/_/g, ' ')})` : '';
-          await post(env.DISCORD_WEBHOOK_SALES, {
+          await post(disputesHook(env), {
             content: '@here',
             allowed_mentions: { parse: ['everyone'] },
             embeds: [orderEmbed(order, '🚨 Dispute opened' + reason, COLORS.dispute, 'Reply on Eldorado.')]
@@ -262,8 +265,11 @@ export async function sendTests(env) {
   const sent = [];
   if (env.DISCORD_WEBHOOK_SALES) {
     await post(env.DISCORD_WEBHOOK_SALES, { content: 'Test message, ignore.', embeds: [orderEmbed(sample, '💰 Sold', COLORS.sale, 'Hand over the account, then mark the order delivered.')] });
-    await post(env.DISCORD_WEBHOOK_SALES, { content: 'Test message, ignore (a real dispute pings @here).', embeds: [orderEmbed({ ...sample, state: { state: 'Disputed' } }, '🚨 Dispute opened (Items Missing From Account)', COLORS.dispute, 'Reply on Eldorado.')] });
     sent.push('sales');
+  }
+  if (disputesHook(env)) {
+    await post(disputesHook(env), { content: 'Test message, ignore (a real dispute pings @here).', embeds: [orderEmbed({ ...sample, state: { state: 'Disputed' } }, '🚨 Dispute opened (Items Missing From Account)', COLORS.dispute, 'Reply on Eldorado.')] });
+    sent.push(env.DISCORD_WEBHOOK_DISPUTES ? 'disputes' : 'disputes (to #sales: DISCORD_WEBHOOK_DISPUTES not set)');
   }
   if (env.DISCORD_WEBHOOK_SUMMARY) {
     await post(env.DISCORD_WEBHOOK_SUMMARY, { content: 'Test message, ignore.', embeds: [{ title: '📊 Daily summary (test)', color: COLORS.summary, fields: [
