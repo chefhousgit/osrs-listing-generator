@@ -3,7 +3,9 @@
 // for a past temporary ban, e.g. "Zezima - hc - temp". Each subfolder has the screenshots
 // for the listing and one .txt file, any name ("email:password:key", e.g. an EternalFarms
 // accounts-export-*.txt; the first valid line is used). After a publish the folder is
-// moved into LISTED_DIR (default ACCOUNTS_DIR\Listed). Nothing here logs file contents.
+// moved into LISTED_DIR (default ACCOUNTS_DIR\Listed) with a listing.json naming its Eldorado
+// offer; once that offer sells it moves on to SOLD_DIR (default: a Sold folder next to Listed)
+// with a sale.json, and back to Listed if the order is canceled. Nothing here logs file contents.
 
 const fs = require('fs/promises');
 const path = require('path');
@@ -54,8 +56,15 @@ function listedDir() {
   return path.resolve(custom || path.join(rootDir(), 'Listed'));
 }
 
-// Neither the listed folder nor a folder called "Listed" (e.g. from before LISTED_DIR was set) is an account.
-const isListedDir = (name) => name.toLowerCase() === 'listed' || path.resolve(rootDir(), name) === listedDir();
+// Where sold accounts go: SOLD_DIR in .env, or a Sold folder next to the listed folder.
+function soldDir() {
+  const custom = (process.env.SOLD_DIR || '').trim().replace(/^"(.*)"$/, '$1');
+  return path.resolve(custom || path.join(path.dirname(listedDir()), 'Sold'));
+}
+
+// Not accounts to list: the listed / sold folders, or folders called "Listed" / "Sold".
+const isListedDir = (name) => ['listed', 'sold'].includes(name.toLowerCase())
+  || [listedDir(), soldDir()].includes(path.resolve(rootDir(), name));
 
 // "Zezima - hc - temp" -> { rsn: 'Zezima', type: 'hcim', tempBan: true };
 // "Zezima" -> { rsn: 'Zezima', type: 'auto', tempBan: false }. Unknown suffixes stay part of the name.
@@ -126,23 +135,24 @@ async function readImage(name, file) {
   return { buffer: await fs.readFile(path.join(dir, file)), type: IMAGE_TYPES[path.extname(file).toLowerCase()] };
 }
 
-// First valid line of the folder's .txt file (any name), or null.
-async function readLogin(name) {
-  const file = await findTxt(await resolveFolder(name));
+// First valid line of the .txt file in dir (any name), or null.
+async function readLoginAt(dir) {
+  const file = await findTxt(dir);
   if (!file) return null;
   const text = (await fs.readFile(file, 'utf8')).replace(/^\uFEFF/, '');
   return text.split(/\r?\n/).map(parseLine).find(Boolean) || null;
 }
 
-// Move a published account into the listed folder, adding " (2)", " (3)"... if the name is taken.
-// Returns the full path it ended up at.
-async function moveToListed(name) {
-  const from = await resolveFolder(name);
-  const listed = listedDir();
-  await fs.mkdir(listed, { recursive: true });
-  let target = path.join(listed, name);
+async function readLogin(name) {
+  return readLoginAt(await resolveFolder(name));
+}
+
+// Move dir into toDir under name, adding " (2)", " (3)"... if taken. Returns the new path.
+async function moveDir(from, toDir, name) {
+  await fs.mkdir(toDir, { recursive: true });
+  let target = path.join(toDir, name);
   for (let n = 2; await fs.stat(target).then(() => true, () => false); n++) {
-    target = path.join(listed, `${name} (${n})`);
+    target = path.join(toDir, `${name} (${n})`);
   }
   try {
     await fs.rename(from, target);
@@ -155,4 +165,84 @@ async function moveToListed(name) {
   return target;
 }
 
-module.exports = { isConfigured, listFolders, listImages, readImage, readLogin, moveToListed, parseFolderName, parseLine };
+const LISTING_FILE = 'listing.json';
+const SALE_FILE = 'sale.json';
+
+async function readJson(file) {
+  try {
+    return JSON.parse(await fs.readFile(file, 'utf8'));
+  } catch (e) {
+    return null;
+  }
+}
+
+const writeJson = (file, data) => fs.writeFile(file, JSON.stringify(data, null, 2) + '\n');
+
+// Move a published account into the listed folder, recording its offer (listing.json) so a later
+// sale can be matched to it. Returns the full path it ended up at.
+async function moveToListed(name, listing) {
+  const target = await moveDir(await resolveFolder(name), listedDir(), name);
+  if (listing) await writeJson(path.join(target, LISTING_FILE), listing);
+  return target;
+}
+
+// Account folders inside dir with their listing.json / sale.json.
+async function foldersIn(dir) {
+  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+  return Promise.all(entries.filter((e) => e.isDirectory()).map(async (e) => {
+    const full = path.join(dir, e.name);
+    return {
+      name: e.name,
+      rsn: parseFolderName(e.name.replace(/\s+\(\d+\)$/, '')).rsn,
+      listing: await readJson(path.join(full, LISTING_FILE)),
+      sale: await readJson(path.join(full, SALE_FILE))
+    };
+  }));
+}
+
+const listedFolders = () => foldersIn(listedDir());
+const soldFolders = () => foldersIn(soldDir());
+
+// A real subfolder of dir, by exact name (requests can't reach anywhere else).
+async function subfolder(dir, name) {
+  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+  if (!entries.some((e) => e.isDirectory() && e.name === name)) {
+    throw Object.assign(new Error(`"${name}" is no longer in ${path.basename(dir)}. Refresh.`), { status: 404 });
+  }
+  return path.join(dir, name);
+}
+
+// An offer sold: Listed -> Sold, with the sale recorded.
+async function moveListedToSold(name, sale) {
+  const target = await moveDir(await subfolder(listedDir(), name), soldDir(), name);
+  await writeJson(path.join(target, SALE_FILE), sale);
+  return target;
+}
+
+// The order was canceled: Sold -> Listed, sale record removed; the offer link is kept (or
+// restored from the sale record) so the account is matched again if it sells later.
+async function moveSoldToListed(name) {
+  const target = await moveDir(await subfolder(soldDir(), name), listedDir(), name);
+  const sale = await readJson(path.join(target, SALE_FILE));
+  const listing = await readJson(path.join(target, LISTING_FILE));
+  if (!listing && sale && sale.offerId) await writeJson(path.join(target, LISTING_FILE), { offerId: sale.offerId, title: sale.title });
+  await fs.rm(path.join(target, SALE_FILE), { force: true });
+  return target;
+}
+
+// Tie a listed folder (from before listing.json existed) to its Eldorado offer.
+async function linkListedFolder(name, listing) {
+  const dir = await subfolder(listedDir(), name);
+  const current = (await readJson(path.join(dir, LISTING_FILE))) || {};
+  await writeJson(path.join(dir, LISTING_FILE), { ...current, ...listing, linkedAt: new Date().toISOString() });
+}
+
+// Login of a listed or sold folder (for the buyer handover message).
+async function readListedOrSoldLogin(where, name) {
+  return readLoginAt(await subfolder(where === 'sold' ? soldDir() : listedDir(), name));
+}
+
+module.exports = {
+  isConfigured, listFolders, listImages, readImage, readLogin, moveToListed, parseFolderName, parseLine,
+  listedDir, soldDir, listedFolders, soldFolders, moveListedToSold, moveSoldToListed, linkListedFolder, readListedOrSoldLogin
+};

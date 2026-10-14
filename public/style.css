@@ -1842,3 +1842,61 @@ html, body {
   color: var(--text-dim);
   padding: 30px 8px !important;
 }
+
+/* ---------- Orders ---------- */
+.order-folder {
+  white-space: nowrap;
+}
+
+.folder-badge {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-right: 6px;
+  border: 1px solid var(--border);
+}
+
+.folder-badge.sold {
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.folder-badge.listed {
+  color: var(--gold);
+  border-color: var(--gold-dim);
+}
+
+.folder-name {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.link-select {
+  background: var(--bg-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 0.82rem;
+  max-width: 200px;
+  margin-right: 6px;
+}
+
+.state-pill.completed,
+.state-pill.received {
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.state-pill.delivered {
+  color: var(--gold);
+  border-color: var(--gold-dim);
+}
+
+.state-pill.disputed,
+.state-pill.delivereddisputed,
+.state-pill.canceled {
+  color: var(--danger);
+  border-color: var(--danger);
+}

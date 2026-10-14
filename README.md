@@ -118,6 +118,15 @@ With Eldorado set up, the **Offers** link at the top opens a page with all your 
 - Editing text keeps everything else: the app reads the offer and its delivery details, changes only the title and description, sends the rest back as it was, then reads it again and warns you if anything else changed.
 - **Bulk**: tick offers (or the header box for all shown) to pause, resume or delete them together, or change their prices by - %, + %, - $, + $ or set a price: **Preview** shows the new prices, **Apply prices** saves them one by one.
 
+## Orders and the Sold folder
+
+The **Orders** link at the top lists your Eldorado sales (Open / Completed / Canceled / All), each with the account folder it belongs to:
+
+- **Copy handover** copies the buyer handover message with the account's RSN and the 2FA key from its folder's `.txt`. Paste it in the buyer's chat on Eldorado.
+- **Mark delivered** appears for orders still waiting on you (manual delivery). Instant-delivery orders are delivered by Eldorado itself.
+- **Sold folder**: when you publish, the account's folder gets a `listing.json` with its offer ID. Every hour while the app is open (and a minute after it starts), the app checks your orders: a sold account moves from Listed to **Sold** (next to the Listed folder, or `SOLD_DIR` in `.env`) with a `sale.json` (price, date, order); a canceled order moves it back to Listed. **Sync folders now** does it on demand.
+- Folders listed before this existed have no `listing.json`: for sales in the last 14 days, pick the folder under **Account folder** and press **Link** once.
+
 ## Discord alerts (optional)
 
 Five channels, one webhook each (channel settings > Integrations > Webhooks > New Webhook > Copy Webhook URL):
@@ -182,6 +191,7 @@ osrs-listing-generator/
 ├── server.js              Express server: prompt, hiscores lookup, quadrant crops, footer, proxy call
 ├── eldorado.js            Eldorado seller API client: token cache, offer payload, create + pause
 ├── discord.js             Discord webhooks from the app (#listed, #errors)
+├── orders.js              Matches sales to account folders; hourly Listed -> Sold sync
 ├── folders.js             ACCOUNTS_DIR account folders: name/type/ban from the folder name, screenshots, the .txt login file, move to Listed
 ├── data/
 │   └── eldorado-osrs.json OSRS account builds and required offer attributes on Eldorado
@@ -192,6 +202,8 @@ osrs-listing-generator/
 │   ├── app.js             Frontend logic: uploads, options, gear drawer, results
 │   ├── eldorado.js        Publish to Eldorado panel
 │   ├── offers.html/.js    Offers manager page
+│   ├── orders.html/.js    Orders page (handover message, mark delivered, folder links)
+│   ├── handover.js        Buyer handover message template (shared)
 │   └── redact.js          Skill blackout tool (calibrated skills grid + free-hand boxes)
 ├── worker/
 │   ├── worker.js          Cloudflare Worker: Claude proxy + cron entry point

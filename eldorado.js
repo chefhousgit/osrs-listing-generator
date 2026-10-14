@@ -342,7 +342,35 @@ async function updateOfferText(id, title, description) {
   return { offer: summarizeOffer(after), warnings };
 }
 
+// ---------- orders ----------
+function summarizeOrder(o) {
+  const offer = o.orderOfferDetails || {};
+  const img = offer.mainOfferImage || {};
+  return {
+    id: o.id,
+    offerId: o.offerId,
+    title: offer.offerTitle || '',
+    category: offer.category || null,
+    price: o.totalPrice ? o.totalPrice.amount : null,
+    currency: o.totalPrice ? o.totalPrice.currency : 'USD',
+    state: o.state ? o.state.state : null,
+    createdDate: o.createdDate,
+    image: img.smallImage ? IMAGE_BASE + img.smallImage : null,
+    delivery: offer.guaranteedDeliveryTime || null
+  };
+}
+
+// Your latest 50 sales (newest first).
+async function listOrders() {
+  const d = await api('GET', '/api/v1/orders/me/seller/orders?displayFilter=DisplaySellingOrders&isAscendingDateOrder=false&pageSize=50');
+  return (d.results || []).map(summarizeOrder);
+}
+
+const deliverOrder = (id) => api('PUT', `/api/v1/orders/me/${enc(id)}/deliver`);
+
 module.exports = {
+  listOrders,
+  deliverOrder,
   OSRS,
   DELIVERY_TIMES,
   EldoradoError,

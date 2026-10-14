@@ -794,14 +794,7 @@ document.querySelectorAll('.copy-btn').forEach((btn) => {
 // ---------- Buyer handover message ----------
 // Sent to the buyer after the sale. RSN follows the account name box until the
 // user edits the message by hand; Reset template restores it.
-const HANDOVER_TEMPLATE = `RSN: {rsn}
-2FA Secret Key: 
-
-
-2FA Secret Key Generator:
-https://totp.danhersam.com/
-
-Please send a message confirming you have logged into the account so I can remove the account details from my panel. If you have any other questions or concerns feel free to reach out. Thank you!`;
+const HANDOVER_TEMPLATE = window.HANDOVER_TEMPLATE; // public/handover.js
 
 const handoverText = document.getElementById('handoverText');
 const handoverCopy = document.getElementById('handoverCopy');
@@ -1160,11 +1153,6 @@ window.folderPublished = function () {
   }
 };
 
-// Put a 2FA secret key on the "2FA Secret Key:" line of a message (added at the end if missing).
-window.withSecretKey = function (text, key) {
-  const line = /^2FA Secret Key:.*$/m;
-  return line.test(text) ? text.replace(line, '2FA Secret Key: ' + key) : text.replace(/\s*$/, '') + '\n2FA Secret Key: ' + key;
-};
 
 // Called by the Eldorado panel when an account is picked from the accounts file.
 window.setHandoverKey = function (key) {

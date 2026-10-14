@@ -6,6 +6,7 @@ const sharp = require('sharp');
 const eldorado = require('./eldorado');
 const folders = require('./folders');
 const discord = require('./discord');
+const orders = require('./orders');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -811,6 +812,13 @@ app.post('/eldorado/offers/:id/resume', offerRoute(async (req) => { await eldora
 app.delete('/eldorado/offers/:id', offerRoute(async (req) => { await eldorado.deleteOffer(req.params.id); return { deleted: true }; }));
 app.post('/eldorado/offers/:id/text', express.json({ limit: '100kb' }), offerRoute((req) => eldorado.updateOfferText(req.params.id, req.body && req.body.title, req.body && req.body.description)));
 
+// ---------- Sold orders (public/orders.html, orders.js) ----------
+app.get('/orders', offerRoute(() => orders.ordersWithFolders()));
+app.post('/orders/sync', offerRoute(() => orders.sync()));
+app.get('/orders/:id/handover', offerRoute((req) => orders.handover(req.params.id)));
+app.post('/orders/:id/link', express.json(), offerRoute((req) => orders.link(req.params.id, String((req.body && req.body.folder) || ''))));
+app.post('/orders/:id/deliver', offerRoute(async (req) => { await eldorado.deliverOrder(req.params.id); return { state: 'Delivered' }; }));
+
 app.get('/eldorado/config', (req, res) => {
   res.json({
     configured: eldorado.isConfigured(),
@@ -840,7 +848,12 @@ app.post('/eldorado/publish', publishUpload, async (req, res) => {
     // The offer exists now, so file the account folder away (if it came from one).
     if (payload.folder && folders.isConfigured()) {
       try {
-        result.movedTo = await folders.moveToListed(String(payload.folder));
+        result.movedTo = await folders.moveToListed(String(payload.folder), {
+          offerId: result.offerId,
+          title: payload.title,
+          price: Number(payload.price),
+          listedAt: new Date().toISOString()
+        });
       } catch (err) {
         result.moveError = err.message;
       }
@@ -869,6 +882,8 @@ app.post('/eldorado/publish', publishUpload, async (req, res) => {
     res.status(status).json({ error: err.message });
   }
 });
+
+orders.start(); // hourly Listed -> Sold folder sync while the app runs
 
 app.listen(PORT, () => {
   console.log(`OSRS Listing Generator running at http://localhost:${PORT}`);

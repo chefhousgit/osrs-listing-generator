@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orders · OSRS Listing Generator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>OSRS Listing Generator</h1>
+    <nav class="topnav">
+      <a href="/">Listing generator</a>
+      <a href="/offers.html">Offers</a>
+      <a href="/orders.html" class="active">Orders</a>
+    </nav>
+  </header>
+
+  <main class="container offers-page">
+    <section class="offers-toolbar">
+      <select id="orderFilter" aria-label="Show">
+        <option value="open">Open (not completed yet)</option>
+        <option value="Completed">Completed</option>
+        <option value="Canceled">Canceled</option>
+        <option value="">All</option>
+      </select>
+      <label class="card-check">
+        <input type="checkbox" id="orderAccounts" checked />
+        <span>Accounts only</span>
+      </label>
+      <button type="button" id="orderSync" class="secondary-btn" title="Move sold accounts from Listed to Sold now (also runs every hour)">Sync folders now</button>
+      <button type="button" id="orderRefresh" class="secondary-btn">Refresh</button>
+      <span id="orderSyncInfo" class="offers-count"></span>
+    </section>
+
+    <section id="orderStatus" class="status-box hidden"></section>
+
+    <section class="offers-table-wrap">
+      <table class="offers-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Order</th>
+            <th>Price</th>
+            <th>State</th>
+            <th>Account folder</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="orderRows"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="handover.js"></script>
+  <script src="orders.js"></script>
+</body>
+</html>
