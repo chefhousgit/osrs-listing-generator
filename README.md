@@ -119,7 +119,7 @@ With Eldorado set up, the **Offers** link at the top opens a page with all your 
 - **Bulk**: tick offers (or the header box for all shown) to pause, resume or delete them together, or change their prices by - %, + %, - $, + $ or set a price: **Preview** shows the new prices, **Apply prices** saves them one by one.
 - **Market**: Eldorado has no market value for OSRS accounts, so each offer is compared with other sellers' live listings of the same type, total-level bracket and combat bracket (your own listings left out): the median, how many listings, and the middle half of their prices. Fewer than 3 matches widens it to type + total bracket, marked **rough**. The % gap is only highlighted for close matches with 10+ listings; otherwise it says **few listings**. **Use median** fills the price box (press Save to apply).
 - **Listed / expires**: days listed (the earlier of when the 24/7 Worker first saw the offer and its expiry date minus 21 days) and how long until the offer expires. **Expiring soon** filters to offers expiring within 3 days. Eldorado's API can't renew offers, so renew those on the site.
-- **Auto-drop** (opt-in per offer): from 14 days listed, -5% every 7 days, never below 75% of the price it had when you ticked it. The 24/7 Worker applies it (checked hourly) and posts each drop to #listed. A price you lowered yourself below the schedule is left alone.
+- **Auto-drop** (opt-in per offer): from 14 days listed, -5% every 7 days, never below 75% of the price it had when you ticked it. The 24/7 Worker applies it (checked hourly) and posts each drop to #price-drops. A price you lowered yourself below the schedule is left alone.
 
 ## Stats
 
@@ -140,7 +140,8 @@ Five channels, one webhook each (channel settings > Integrations > Webhooks > Ne
 
 | Channel | What | Sent by |
 |---|---|---|
-| `#listed` | Every offer the app creates, with the listing card, type, total level, price, delivery and offer ID; auto price drops (from the Worker, if `DISCORD_WEBHOOK_LISTED` is also set as a Worker secret, otherwise in #summary) | the app, while it runs, and the Worker |
+| `#listed` | Every offer the app creates, with the listing card, type, total level, price, delivery and offer ID | the app, while it runs |
+| `#price-drops` | Each auto price drop: old and new price, days listed, floor (set `DISCORD_WEBHOOK_PRICE_DROPS` as a Worker secret; until then they go to #summary) | the Worker, 24/7 |
 | `#errors` | Publish failed, offer left live (@here), folder not moved, no login details sent; Eldorado rejecting the API credentials or credentials about to expire; an offer expiring within 2 days | the app and the Worker |
 | `#sales` | New orders, cancellations, completed orders | the Worker, 24/7 |
 | `#disputes` | Disputes, with @here and the reason (go to `#sales` until this webhook is set) | the Worker, 24/7 |
@@ -164,6 +165,7 @@ DISCORD_WEBHOOK_ERRORS=https://discord.com/api/webhooks/...
    npx wrangler secret put ELDORADO_CLIENT_SECRET
    npx wrangler secret put DISCORD_WEBHOOK_SALES
    npx wrangler secret put DISCORD_WEBHOOK_DISPUTES
+   npx wrangler secret put DISCORD_WEBHOOK_PRICE_DROPS
    npx wrangler secret put DISCORD_WEBHOOK_SUMMARY
    npx wrangler secret put DISCORD_WEBHOOK_ERRORS
    ```

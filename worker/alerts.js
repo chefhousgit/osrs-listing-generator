@@ -4,7 +4,7 @@
 //   #disputes disputes (@here); falls back to #sales if DISCORD_WEBHOOK_DISPUTES is not set
 //   #summary  once a day at SUMMARY_HOUR in TIMEZONE: last 24h listed / sold / revenue, sold this
 //             week, stock (offers + the app's folder counts), stale and soon-expiring offers
-//   #listed   auto price drops (DISCORD_WEBHOOK_LISTED; falls back to #summary)
+//   #price-drops auto price drops (DISCORD_WEBHOOK_PRICE_DROPS; falls back to #listed, then #summary)
 //   #errors   also: an offer expiring within EXPIRY_WARN_DAYS (once per offer)
 //
 // Auto price drops (opt-in per offer from the app's Offers page, stored in KV "autodrop"): from
@@ -95,7 +95,7 @@ async function getOffers(token) {
 // ---------- Discord ----------
 const disputesHook = (env) => env.DISCORD_WEBHOOK_DISPUTES || env.DISCORD_WEBHOOK_SALES;
 const errorsHook = (env) => env.DISCORD_WEBHOOK_ERRORS || env.DISCORD_WEBHOOK_ALERTS;
-const listedHook = (env) => env.DISCORD_WEBHOOK_LISTED || env.DISCORD_WEBHOOK_SUMMARY;
+const priceDropsHook = (env) => env.DISCORD_WEBHOOK_PRICE_DROPS || env.DISCORD_WEBHOOK_LISTED || env.DISCORD_WEBHOOK_SUMMARY;
 
 async function post(url, payload) {
   if (!url) return;
@@ -250,7 +250,7 @@ async function applyPriceDrops(env, token, offers, firstSeen) {
     entry.lastDrop = { at: new Date().toISOString(), from: current, to: target };
     changed = true;
     const atFloor = target <= round2(entry.base * DROP_FLOOR);
-    await post(listedHook(env), { embeds: [{
+    await post(priceDropsHook(env), { embeds: [{
       title: `📉 Price drop: ${(offer.offerTitle || 'Account').slice(0, 200)}`,
       color: COLORS.done,
       fields: [
