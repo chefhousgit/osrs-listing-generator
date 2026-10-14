@@ -1,0 +1,24 @@
+name: Patch notes
+
+# Posts the "Patch notes:" sections of pushed commits to Discord (see .github/scripts/patch-notes.js).
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Post to Discord
+        env:
+          DISCORD_WEBHOOK_PATCH_NOTES: ${{ secrets.DISCORD_WEBHOOK_PATCH_NOTES }}
+        run: node .github/scripts/patch-notes.js
