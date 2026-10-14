@@ -190,6 +190,10 @@ The first run only remembers the orders and offers that already exist (no flood 
 - **No Publish to Eldorado panel** — `ELDORADO_CLIENT_ID` or `ELDORADO_CLIENT_SECRET` is missing from `.env`, or the app wasn't restarted after adding them.
 - **Server starts but generation fails silently** — check the terminal running `npm start` for error logs.
 
+## Tests
+
+`npm test` runs offline checks for editing an offer's text and for marking an order delivered. Those two Eldorado calls haven't been tried on the live account. The tests swap `fetch` for a fake Eldorado (`test/helpers/fake-eldorado.js`) that refuses every other host, so nothing reaches Eldorado or Discord. When `docs/eldorado-seller-swagger.json` is present, the fake also checks each request body against Eldorado's own schema.
+
 ## Project layout
 
 ```
