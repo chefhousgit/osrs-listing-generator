@@ -164,19 +164,25 @@ async function clearRateLimit(env, key) {
 
 // ---------- every 5 minutes ----------
 const SOLD_STATES = ['Paid', 'Delivered', 'Received', 'Completed', 'PendingReview'];
-
-async function checkOrders(env, token) {
+export async function checkOrders(env, token) {
   const orders = await getOrders(token, 50); // one request either way; 50 so late reviews are still seen
   await announceReviews(env, orders);
   const seen = await env.STATE.get('orders', 'json');
   const next = Object.assign({}, seen || {});
   let changed = !seen;
 
+  // An unseen order older than every remembered order in this list was just outside what earlier
+  // checks read (e.g. after reading more orders per check): history, recorded without a post.
+  // New sales always come in above that line, even ones created earlier and paid since.
+  const remembered = orders.filter((o) => seen && seen[o.id] !== undefined).map((o) => Date.parse(o.createdDate)).filter(Number.isFinite);
+  const floor = remembered.length ? Math.min(...remembered) : -Infinity;
+  const isNewSale = (order) => !(Date.parse(order.createdDate) < floor);
+
   for (const order of orders.slice().reverse()) { // oldest first, so Discord reads in order
     const state = order.state && order.state.state;
     const before = seen ? seen[order.id] : undefined;
     if (seen) {
-      if (before === undefined && SOLD_STATES.includes(state)) {
+      if (before === undefined && SOLD_STATES.includes(state) && isNewSale(order)) {
         await post(env.DISCORD_WEBHOOK_SALES, { embeds: [orderEmbed(order, '💰 Sold', COLORS.sale, 'Hand over the account, then mark the order delivered.')] });
       } else if (before !== undefined && before !== state) {
         if (state === 'Disputed' || state === 'DeliveredDisputed') {

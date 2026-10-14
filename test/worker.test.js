@@ -20,10 +20,16 @@ function fakeKV() {
 }
 
 let posts;
+let eldoradoOrders = []; // what the fake Eldorado order list returns
 const realFetch = globalThis.fetch;
 test.beforeEach(() => {
   posts = [];
+  eldoradoOrders = [];
   globalThis.fetch = async (url, init) => {
+    if (String(url).startsWith('https://www.eldorado.gg/api/v1/orders/me/seller/orders')) {
+      const size = Number(new URL(url).searchParams.get('pageSize'));
+      return new Response(JSON.stringify({ results: eldoradoOrders.slice(0, size) }), { status: 200 });
+    }
     if (!String(url).startsWith('https://discord.test/')) throw new Error('blocked: ' + url);
     posts.push({ url, body: JSON.parse(init.body) });
     return new Response(null, { status: 204 });
@@ -107,6 +113,62 @@ test('reviews: hidden messages are marked, orders without a review are skipped',
   await announceReviews(e, [order('a', { ...positive, isReviewMessageVisible: false }), order('c', null)]);
   assert.equal(posts.length, 1);
   assert.match(posts[0].body.embeds[0].description, /^\(hidden on Eldorado\)/);
+});
+
+// ---------- sales ----------
+// Newest first, like Eldorado: order n was created n hours ago.
+const sales = (count) => Array.from({ length: count }, (_, n) => ({
+  ...order('s' + n, null),
+  state: { state: 'Completed' },
+  createdDate: new Date(Date.now() - n * 3600 * 1000).toISOString()
+}));
+const salePosts = () => posts.filter((p) => p.url === 'https://discord.test/sales');
+
+test('sales: reading more orders than before does not re-announce old ones', async () => {
+  const { checkOrders } = await load('alerts.js');
+  const e = env();
+  const all = sales(50);
+  // Before: the checks read 25 orders and remembered those.
+  await e.STATE.put('orders', JSON.stringify(Object.fromEntries(all.slice(0, 25).map((o) => [o.id, 'Completed']))));
+  eldoradoOrders = all;
+  await checkOrders(e, 'token');
+  assert.equal(salePosts().length, 0, 'orders 26-50 (older than every remembered one) are recorded quietly');
+  assert.equal(Object.keys(await e.STATE.get('orders', 'json')).length, 50);
+});
+
+test('sales: a new order is still announced, and only once', async () => {
+  const { checkOrders } = await load('alerts.js');
+  const e = env();
+  const old = sales(10);
+  eldoradoOrders = old;
+  await checkOrders(e, 'token'); // first run: remembers, posts nothing
+  const fresh = { ...order('new-sale', null), state: { state: 'Paid' }, createdDate: new Date().toISOString() };
+  eldoradoOrders = [fresh, ...old];
+  await checkOrders(e, 'token');
+  await checkOrders(e, 'token');
+  assert.equal(salePosts().length, 1);
+  assert.match(salePosts()[0].body.embeds[0].title, /💰 Sold/);
+});
+
+test('sales: an order created earlier that only shows up now (paid later) is still announced', async () => {
+  const { checkOrders } = await load('alerts.js');
+  const e = env();
+  const old = sales(10); // 0-9 hours old, all remembered
+  eldoradoOrders = old;
+  await checkOrders(e, 'token');
+  const late = { ...order('paid-late', null), state: { state: 'Paid' }, createdDate: new Date(Date.now() - 5 * 3600 * 1000).toISOString() };
+  eldoradoOrders = [...old.slice(0, 5), late, ...old.slice(5)];
+  await checkOrders(e, 'token');
+  assert.equal(salePosts().length, 1);
+});
+
+test('sales: an order with no created date is treated as new (never silently dropped)', async () => {
+  const { checkOrders } = await load('alerts.js');
+  const e = env();
+  await e.STATE.put('orders', '{}');
+  eldoradoOrders = [{ ...order('no-date', null), state: { state: 'Paid' }, createdDate: undefined }];
+  await checkOrders(e, 'token');
+  assert.equal(salePosts().length, 1);
 });
 
 // ---------- backup ----------
