@@ -1900,3 +1900,203 @@ html, body {
   color: var(--danger);
   border-color: var(--danger);
 }
+
+/* ---------- Offers: market, expiry, auto-drop ---------- */
+.offer-market {
+  min-width: 150px;
+}
+
+.market-median {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.market-gap {
+  display: inline-block;
+  margin-top: 3px;
+  font-size: 0.72rem;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.market-gap.above {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.market-gap.below {
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.market-use {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.78rem;
+}
+
+.offer-expiry {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.offer-expiry.soon {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.offer-drop {
+  white-space: nowrap;
+}
+
+/* ---------- Stats ---------- */
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.stat-tile {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.stat-label {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stat-value {
+  color: var(--text);
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-sub {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  margin-top: 2px;
+}
+
+.stats-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  position: relative;
+}
+
+.stats-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.stats-panel-head h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.week-chart {
+  position: relative;
+}
+
+.week-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.week-svg .grid-line {
+  stroke: var(--border);
+  stroke-width: 1;
+  opacity: 0.6;
+}
+
+.week-svg .axis-line {
+  stroke: var(--text-dim);
+  stroke-width: 1;
+  opacity: 0.6;
+}
+
+.week-svg .axis-text {
+  fill: var(--text-dim);
+  font-size: 11px;
+  font-family: inherit;
+}
+
+.week-svg .week-bar {
+  fill: #bd8a2e;
+  pointer-events: none;
+}
+
+.week-svg .week-hit {
+  fill: transparent;
+  cursor: default;
+  outline: none;
+}
+
+.week-svg .week-hit.on {
+  fill: rgba(239, 228, 204, 0.06);
+}
+
+.chart-tip {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  color: var(--text);
+  min-width: 120px;
+  box-shadow: var(--shadow);
+}
+
+.stats-table-toggle {
+  margin-top: 8px;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.stats-table td,
+.stats-table th {
+  font-variant-numeric: tabular-nums;
+}
+
+.count-cell {
+  white-space: nowrap;
+}
+
+.count-bar {
+  display: inline-block;
+  height: 8px;
+  border-radius: 0 4px 4px 0;
+  background: #bd8a2e;
+  vertical-align: middle;
+}
+
+.stats-foot {
+  margin-top: 4px;
+}

@@ -2,8 +2,14 @@
 //
 //   #sales    new orders, cancellations, completed orders
 //   #disputes disputes (@here); falls back to #sales if DISCORD_WEBHOOK_DISPUTES is not set
-//   #summary  once a day at SUMMARY_HOUR in TIMEZONE: last 24h listed / sold / revenue, stock,
-//             accounts listed STALE_DAYS+ days without a sale
+//   #summary  once a day at SUMMARY_HOUR in TIMEZONE: last 24h listed / sold / revenue, sold this
+//             week, stock (offers + the app's folder counts), stale and soon-expiring offers
+//   #listed   auto price drops (DISCORD_WEBHOOK_LISTED; falls back to #summary)
+//   #errors   also: an offer expiring within EXPIRY_WARN_DAYS (once per offer)
+//
+// Auto price drops (opt-in per offer from the app's Offers page, stored in KV "autodrop"): from
+// DROP_START_DAYS listed, -DROP_PCT every DROP_EVERY_DAYS, never below DROP_FLOOR of the price it
+// had when you opted in. A price you lowered yourself below the schedule is left alone.
 //   #errors   Eldorado rejecting the API credentials, credentials about to expire, failed checks
 //
 // Secrets (wrangler secret put): ELDORADO_CLIENT_ID, ELDORADO_CLIENT_SECRET, DISCORD_WEBHOOK_SALES, DISCORD_WEBHOOK_DISPUTES,
@@ -23,6 +29,12 @@ const STALE_DAYS = 14;
 const DAY = 24 * 60 * 60 * 1000;
 const HOUR = 60 * 60 * 1000;
 const OFFERS_EVERY = 55 * 60 * 1000;   // offer list refresh interval
+const OFFER_LIFETIME_DAYS = 21;        // Eldorado offers expire this long after listing
+const EXPIRY_WARN_DAYS = 2;
+const DROP_START_DAYS = 14;
+const DROP_EVERY_DAYS = 7;
+const DROP_PCT = 0.05;
+const DROP_FLOOR = 0.75;
 const RATE_LIMIT_GRACE_HOURS = 3;
 
 const COLORS = { sale: 0x5cb85c, dispute: 0xd9534f, cancel: 0x888888, done: 0xe4b04a, summary: 0xe4b04a, alert: 0xd68f3c };
@@ -83,6 +95,7 @@ async function getOffers(token) {
 // ---------- Discord ----------
 const disputesHook = (env) => env.DISCORD_WEBHOOK_DISPUTES || env.DISCORD_WEBHOOK_SALES;
 const errorsHook = (env) => env.DISCORD_WEBHOOK_ERRORS || env.DISCORD_WEBHOOK_ALERTS;
+const listedHook = (env) => env.DISCORD_WEBHOOK_LISTED || env.DISCORD_WEBHOOK_SUMMARY;
 
 async function post(url, payload) {
   if (!url) return;
@@ -192,6 +205,84 @@ async function checkOrders(env, token) {
   if (changed) await env.STATE.put('orders', JSON.stringify(next));
 }
 
+// When an offer was listed: the earlier of when the checks first saw it and its expiry date minus
+// Eldorado's offer lifetime (offers listed before these checks existed).
+export function listedSince(offer, firstSeen) {
+  const seen = firstSeen && firstSeen[offer.id] ? Date.parse(firstSeen[offer.id]) : Infinity;
+  const fromExpiry = offer.expireDate ? Date.parse(offer.expireDate) - OFFER_LIFETIME_DAYS * DAY : Infinity;
+  const t = Math.min(seen, fromExpiry);
+  return Number.isFinite(t) ? t : Date.now();
+}
+
+const ageDays = (offer, firstSeen) => Math.floor((Date.now() - listedSince(offer, firstSeen)) / DAY);
+
+// ---------- auto price drops (opt-in) ----------
+const round2 = (n) => Math.round(n * 100) / 100;
+
+// The price the schedule wants now, or null before the first drop.
+export function scheduledPrice(base, days) {
+  if (days < DROP_START_DAYS) return null;
+  const steps = 1 + Math.floor((days - DROP_START_DAYS) / DROP_EVERY_DAYS);
+  return round2(Math.max(base * Math.pow(1 - DROP_PCT, steps), base * DROP_FLOOR));
+}
+
+async function applyPriceDrops(env, token, offers, firstSeen) {
+  const plan = (await env.STATE.get('autodrop', 'json')) || {};
+  let changed = false;
+  for (const [id, entry] of Object.entries(plan)) {
+    const offer = offers.find((o) => o.id === id);
+    if (!offer) { delete plan[id]; changed = true; continue; } // sold or deleted
+    if (offer.offerState !== 'Active' || !offer.pricePerUnit) continue;
+    const days = ageDays(offer, firstSeen);
+    const target = scheduledPrice(entry.base, days);
+    const current = offer.pricePerUnit.amount;
+    if (target == null || current <= target + 0.004) continue;
+    const res = await fetch(ELDORADO + `/api/flexibleOffersUser/me/${encodeURIComponent(id)}/changePrice`, {
+      method: 'PUT',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount: target, currency: 'USD' })
+    });
+    if (!res.ok) {
+      await alertOnce(env, 'drop:' + id, `Auto price drop for "${offer.offerTitle}" failed (${res.status}).`);
+      continue;
+    }
+    offer.pricePerUnit = { ...offer.pricePerUnit, amount: target };
+    entry.lastDrop = { at: new Date().toISOString(), from: current, to: target };
+    changed = true;
+    const atFloor = target <= round2(entry.base * DROP_FLOOR);
+    await post(listedHook(env), { embeds: [{
+      title: `📉 Price drop: ${(offer.offerTitle || 'Account').slice(0, 200)}`,
+      color: COLORS.done,
+      fields: [
+        { name: 'Price', value: `${money({ amount: current })} → **${money({ amount: target })}**`, inline: true },
+        { name: 'Listed', value: `${days} days`, inline: true },
+        { name: 'Floor', value: money({ amount: round2(entry.base * DROP_FLOOR) }) + (atFloor ? ' (reached)' : ''), inline: true }
+      ],
+      timestamp: new Date().toISOString()
+    }] });
+  }
+  if (changed) await env.STATE.put('autodrop', JSON.stringify(plan));
+}
+
+// Opt an offer in (base = its current price) or out. Called by the app.
+export async function setAutoDrop(env, { offerId, enabled, base }) {
+  const plan = (await env.STATE.get('autodrop', 'json')) || {};
+  if (enabled) plan[offerId] = { base: Number(base), since: new Date().toISOString() };
+  else delete plan[offerId];
+  await env.STATE.put('autodrop', JSON.stringify(plan));
+  return { ok: true, autodrop: plan[offerId] || null };
+}
+
+// ---------- expiry ----------
+async function warnExpiring(env, offers) {
+  for (const o of offers) {
+    if (o.offerState !== 'Active' || !o.expireDate) continue;
+    const left = (Date.parse(o.expireDate) - Date.now()) / DAY;
+    if (left > EXPIRY_WARN_DAYS || left < -1) continue;
+    await alertOnce(env, 'expiry:' + o.id, `⏳ "${o.offerTitle}" expires ${left <= 0 ? 'today' : 'in ' + Math.ceil(left) + (Math.ceil(left) === 1 ? ' day' : ' days')} (${o.expireDate.slice(0, 10)}). Renew it on Eldorado so it stays listed.`);
+  }
+}
+
 // First-seen time per offer, so the summary can tell new and stale listings apart.
 async function trackOffers(env, offers) {
   const seen = (await env.STATE.get('offers', 'json')) || {};
@@ -221,17 +312,32 @@ async function sendSummary(env, token, offers, firstSeen) {
   const revenue = sold.reduce((sum, o) => sum + Number((o.totalPrice && o.totalPrice.amount) || 0), 0);
   const active = offers.filter((o) => o.offerState === 'Active');
   const paused = offers.filter((o) => o.offerState === 'Paused');
-  const listed = offers.filter((o) => now - Date.parse(firstSeen[o.id]) < DAY);
+  const listed = offers.filter((o) => now - listedSince(o, firstSeen) < DAY);
   const stale = active
-    .filter((o) => now - Date.parse(firstSeen[o.id]) > STALE_DAYS * DAY)
-    .map((o) => `• ${(o.offerTitle || 'Account').slice(0, 60)} (${money(o.pricePerUnit)}, ${Math.floor((now - Date.parse(firstSeen[o.id])) / DAY)}d)`);
+    .filter((o) => ageDays(o, firstSeen) >= STALE_DAYS)
+    .map((o) => `• ${(o.offerTitle || 'Account').slice(0, 60)} (${money(o.pricePerUnit)}, ${ageDays(o, firstSeen)}d)`);
+  const expiring = active
+    .filter((o) => o.expireDate && Date.parse(o.expireDate) - now < 3 * DAY)
+    .map((o) => `• ${(o.offerTitle || 'Account').slice(0, 60)} (${o.expireDate.slice(5, 10)})`);
+  const week = orders.filter((o) => now - Date.parse(o.createdDate) < 7 * DAY && o.state && o.state.state !== 'Canceled');
+  const stock = await env.STATE.get('stock', 'json');
+  const autodrop = (await env.STATE.get('autodrop', 'json')) || {};
 
   const fields = [
     { name: 'Listed (24h)', value: String(listed.length), inline: true },
     { name: 'Sold (24h)', value: String(sold.length), inline: true },
     { name: 'Revenue (24h)', value: '$' + revenue.toFixed(2), inline: true },
-    { name: 'In stock', value: `${active.length} active · ${paused.length} paused`, inline: false }
+    { name: 'Sold this week', value: `${week.length} · $${week.reduce((s, o) => s + Number((o.totalPrice && o.totalPrice.amount) || 0), 0).toFixed(2)}`, inline: true },
+    { name: 'On Eldorado', value: `${active.length} active · ${paused.length} paused`, inline: true },
+    { name: 'Auto price drops', value: `${Object.keys(autodrop).length} offer${Object.keys(autodrop).length === 1 ? '' : 's'}`, inline: true }
   ];
+  if (stock) {
+    const when = new Date(stock.at).toLocaleTimeString('en-US', { timeZone: env.TIMEZONE || 'UTC', hour: 'numeric', minute: '2-digit' });
+    fields.push({ name: 'Account folders', value: `${stock.waiting} waiting to list · ${stock.listed} in Listed · ${stock.sold} in Sold (as of ${when})`, inline: false });
+  }
+  if (expiring.length) {
+    fields.push({ name: `Expiring within 3 days (${expiring.length})`, value: expiring.slice(0, 10).join('\n') + (expiring.length > 10 ? `\n…and ${expiring.length - 10} more` : '') });
+  }
   if (stale.length) {
     fields.push({ name: `Listed ${STALE_DAYS}+ days, no sale (${stale.length})`, value: stale.slice(0, 10).join('\n') + (stale.length > 10 ? `\n…and ${stale.length - 10} more` : '') });
   }
@@ -281,8 +387,10 @@ export async function runAlerts(env, { forceSummary = false } = {}) {
     offers = cache.offers;
   } else {
     try {
-      offers = (await getOffers(token)).map((o) => ({ id: o.id, offerState: o.offerState, offerTitle: o.offerTitle, pricePerUnit: o.pricePerUnit }));
+      offers = (await getOffers(token)).map((o) => ({ id: o.id, offerState: o.offerState, offerTitle: o.offerTitle, pricePerUnit: o.pricePerUnit, expireDate: o.expireDate }));
       firstSeen = await trackOffers(env, offers);
+      await applyPriceDrops(env, token, offers, firstSeen);
+      await warnExpiring(env, offers);
       await env.STATE.put('offersCache', JSON.stringify({ at: Date.now(), offers }));
       await clearRateLimit(env, 'offers');
     } catch (err) {

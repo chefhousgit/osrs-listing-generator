@@ -8,6 +8,7 @@
   const searchEl = $('offerSearch');
   const stateEl = $('offerState');
   const staleEl = $('offerStale');
+  const expiringEl = $('offerExpiring');
   const sortEl = $('offerSort');
   const countEl = $('offerCount');
   const statusEl = $('offerStatus');
@@ -19,6 +20,11 @@
   const bulkApply = $('bulkApply');
 
   const STALE_DAYS = 14;
+  const COLS = 9;
+  // Auto-drop schedule (same as the Worker): from day 14, -5% every 7 days, floor 75%.
+  const DROP = { start: 14, every: 7, pct: 0.05, floor: 0.75 };
+  const MARKET_CONFIDENT = 10; // listings needed before the gap is highlighted
+  let market = null;         // offer id -> market info (loaded after the table)
   let offers = [];
   let agesAvailable = false;
   const selected = new Set();
@@ -59,16 +65,28 @@
       staleEl.disabled = !agesAvailable;
       status('', '');
       render();
+      loadMarket();
     } catch (err) {
       status('error', err.message);
     }
+  }
+
+  async function loadMarket() {
+    market = null;
+    try {
+      market = (await call('GET', '/eldorado/market')).market;
+    } catch (err) {
+      market = { error: err.message };
+    }
+    render();
   }
 
   function visibleOffers() {
     const q = searchEl.value.trim().toLowerCase();
     const list = offers.filter((o) => (!q || o.title.toLowerCase().includes(q))
       && (!stateEl.value || o.state === stateEl.value)
-      && (!staleEl.checked || (o.daysListed != null && o.daysListed >= STALE_DAYS)));
+      && (!staleEl.checked || (o.daysListed != null && o.daysListed >= STALE_DAYS))
+      && (!expiringEl.checked || (o.expiresInDays != null && o.expiresInDays <= 3)));
     const days = (o) => (o.daysListed == null ? -1 : o.daysListed);
     const sorts = {
       'days-desc': (a, b) => days(b) - days(a),
@@ -91,7 +109,7 @@
     if (!list.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 7;
+      td.colSpan = COLS;
       td.className = 'offers-empty';
       td.textContent = offers.length ? 'No offers match.' : 'No account offers on Eldorado.';
       tr.appendChild(td);
@@ -156,20 +174,101 @@
     tdPrice.append('$', priceInput, save);
     if (preview.has(o.id)) tdPrice.appendChild(el('span', 'price-preview', '→ ' + money(preview.get(o.id))));
 
+    const tdMarket = marketCell(o, priceInput, save);
+
     const tdState = el('td');
     tdState.appendChild(el('span', 'state-pill ' + (o.state || '').toLowerCase(), o.state));
 
     const days = o.daysListed;
     const tdDays = el('td', days != null && days >= STALE_DAYS ? 'offer-days stale' : 'offer-days',
       days == null ? '-' : days === 0 ? 'today' : days + (days === 1 ? ' day' : ' days'));
+    if (o.expiresInDays != null) {
+      const left = o.expiresInDays;
+      tdDays.appendChild(el('div', 'offer-expiry' + (left <= 3 ? ' soon' : ''),
+        left < 0 ? 'expired' : left === 0 ? 'expires today' : `expires in ${left}d`));
+    }
+
+    const tdDrop = dropCell(o);
 
     const tdActions = el('td', 'offer-actions');
     tdActions.appendChild(button(o.state === 'Paused' ? 'Resume' : 'Pause', 'secondary-btn small-btn', () => setState(o, o.state === 'Paused' ? 'resume' : 'pause')));
     tdActions.appendChild(button(editing === o.id ? 'Close' : 'Edit', 'secondary-btn small-btn', () => { editing = editing === o.id ? null : o.id; render(); }));
     tdActions.appendChild(confirmButton('Delete', 'Confirm delete', () => remove([o.id])));
 
-    tr.append(tdCb, tdImg, tdTitle, tdPrice, tdState, tdDays, tdActions);
+    tr.append(tdCb, tdImg, tdTitle, tdPrice, tdMarket, tdState, tdDays, tdDrop, tdActions);
     return tr;
+  }
+
+  function marketCell(o, priceInput, save) {
+    const td = el('td', 'offer-market');
+    if (!market) return td.appendChild(el('span', 'offer-meta', 'loading...')), td;
+    if (market.error) return td.appendChild(el('span', 'offer-meta', 'unavailable')), td;
+    const m = market[o.id];
+    if (!m || m.error) return td.appendChild(el('span', 'offer-meta', '-')), td;
+    if (!m.count) return td.appendChild(el('span', 'offer-meta', 'no other listings')), td;
+    td.title = `${m.count} other live listing${m.count === 1 ? '' : 's'} (${m.scope === 'close' ? 'same type, total and combat bracket' : 'same type and total bracket only'}). Middle half priced ${money(m.low)} to ${money(m.high)}.`;
+    td.appendChild(el('div', 'market-median', 'median ' + money(m.median)));
+    td.appendChild(el('div', 'offer-meta', `${m.count} listing${m.count === 1 ? '' : 's'} · ${money(m.low)}-${money(m.high)}${m.scope === 'broad' ? ' · broad' : ''}`));
+    if (m.scope === 'close' && m.count >= MARKET_CONFIDENT && m.gapPct != null) {
+      const cls = m.gapPct > 10 ? 'above' : m.gapPct < -10 ? 'below' : 'near';
+      td.appendChild(el('span', 'market-gap ' + cls, (m.gapPct > 0 ? '+' : '') + m.gapPct + '% vs median'));
+    } else {
+      td.appendChild(el('span', 'market-gap few', m.scope === 'broad' ? 'rough: type + total only' : 'few listings'));
+    }
+    const use = button('Use median', 'link-btn market-use', () => {
+      priceInput.value = Number(m.median).toFixed(2);
+      priceInput.dispatchEvent(new Event('input'));
+      priceInput.focus();
+      save.classList.remove('hidden');
+    });
+    td.appendChild(use);
+    return td;
+  }
+
+  function scheduled(base, days) {
+    if (days == null || days < DROP.start) return null;
+    const steps = 1 + Math.floor((days - DROP.start) / DROP.every);
+    return Math.round(Math.max(base * Math.pow(1 - DROP.pct, steps), base * DROP.floor) * 100) / 100;
+  }
+
+  function dropCell(o) {
+    const td = el('td', 'offer-drop');
+    const label = el('label', 'card-check');
+    const cb = el('input');
+    cb.type = 'checkbox';
+    cb.checked = Boolean(o.autodrop);
+    cb.addEventListener('change', () => setAutoDrop(o, cb.checked, cb));
+    label.append(cb, el('span', null, o.autodrop ? 'On' : 'Off'));
+    td.appendChild(label);
+    if (o.autodrop) {
+      const base = o.autodrop.base;
+      const floor = Math.round(base * DROP.floor * 100) / 100;
+      const days = o.daysListed;
+      let next;
+      if (o.price <= floor + 0.004) next = 'at floor ' + money(floor);
+      else if (days == null || days < DROP.start) next = `first -5% at day ${DROP.start}`;
+      else {
+        const nextDay = DROP.start + (Math.floor((days - DROP.start) / DROP.every) + 1) * DROP.every;
+        next = `next ${money(scheduled(base, nextDay))} at day ${nextDay}`;
+      }
+      td.appendChild(el('div', 'offer-meta', next));
+      td.title = `Opted in at ${money(base)}. Floor ${money(floor)}.`;
+    }
+    return td;
+  }
+
+  async function setAutoDrop(o, enabled, cb) {
+    cb.disabled = true;
+    try {
+      const out = await call('POST', `/eldorado/offers/${encodeURIComponent(o.id)}/autodrop`, { enabled, base: o.price });
+      o.autodrop = out.autodrop;
+      status('ok', enabled
+        ? `Auto price drops on for "${o.title}": -5% at day ${DROP.start}, then every ${DROP.every} days, never below ${money(o.price * DROP.floor)}.`
+        : `Auto price drops off for "${o.title}".`);
+    } catch (err) {
+      status('error', err.message);
+    }
+    render();
   }
 
   // Two-step button: first click arms it for 4 seconds, second click runs it.
@@ -190,7 +289,7 @@
   function editorRow(o) {
     const tr = el('tr', 'offer-editor');
     const td = el('td');
-    td.colSpan = 7;
+    td.colSpan = COLS;
     const title = el('input', 'editor-title');
     title.type = 'text';
     title.value = o.title;
@@ -353,7 +452,7 @@
     render();
   });
 
-  [searchEl, stateEl, staleEl, sortEl].forEach((e) => e.addEventListener('input', render));
+  [searchEl, stateEl, staleEl, expiringEl, sortEl].forEach((e) => e.addEventListener('input', render));
   $('offerRefresh').addEventListener('click', load);
 
   load();

@@ -251,7 +251,13 @@ function summarizeOffer(o) {
     total: totalLevel(totalNum, totalSel),
     image: img.smallImage ? IMAGE_BASE + img.smallImage : null,
     imageLarge: img.largeImage ? IMAGE_BASE + img.largeImage : null,
-    expires: o.expireDate || null
+    expires: o.expireDate || null,
+    // for the market check: same type + bracket, near this total
+    typeId: type && type.value ? type.value.id : null,
+    bracketId: totalSel && totalSel.value ? totalSel.value.id : null,
+    combatId: attr('osrs-combat-level') && attr('osrs-combat-level').value ? attr('osrs-combat-level').value.id : null,
+    totalExact: typeof totalLevel(totalNum, totalSel) === 'number' ? totalLevel(totalNum, totalSel) : null,
+    userId: o.userId || null
   };
 }
 
@@ -366,10 +372,35 @@ async function listOrders() {
   return (d.results || []).map(summarizeOrder);
 }
 
+// Sales history for the stats page, newest first, following Eldorado's cursor (up to max orders).
+async function listAllOrders(max = 500) {
+  const base = '/api/v1/orders/me/seller/orders?displayFilter=DisplaySellingOrders&isAscendingDateOrder=false&pageSize=50';
+  const all = [];
+  let cursor = null;
+  while (all.length < max) {
+    const d = await api('GET', base + (cursor ? '&cursorValue=' + enc(cursor) : ''));
+    all.push(...(d.results || []));
+    if (!d.nextPageCursor || !(d.results || []).length || d.nextPageCursor === cursor) break;
+    cursor = d.nextPageCursor;
+  }
+  return all.map((o) => {
+    const attrs = (o.orderOfferDetails && o.orderOfferDetails.offerAttributesProperties) || [];
+    const attr = (id) => attrs.find((a) => a.attributeId === id);
+    const type = attr('osrs-account-type');
+    const bracket = attr('osrs-total-level');
+    return {
+      ...summarizeOrder(o),
+      type: type ? (type.values || [])[0] || type.id : null,
+      bracket: bracket ? (bracket.values || [])[0] || bracket.id : null
+    };
+  });
+}
+
 const deliverOrder = (id) => api('PUT', `/api/v1/orders/me/${enc(id)}/deliver`);
 
 module.exports = {
   listOrders,
+  listAllOrders,
   deliverOrder,
   OSRS,
   DELIVERY_TIMES,

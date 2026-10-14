@@ -13,6 +13,7 @@
       <a href="/">Listing generator</a>
       <a href="/offers.html" class="active">Offers</a>
       <a href="/orders.html">Orders</a>
+      <a href="/stats.html">Stats</a>
     </nav>
   </header>
 
@@ -24,9 +25,13 @@
         <option value="Active">Active</option>
         <option value="Paused">Paused</option>
       </select>
-      <label class="card-check" title="Offers the 24/7 worker has seen for 14 days or more">
+      <label class="card-check" title="Offers listed for 14 days or more">
         <input type="checkbox" id="offerStale" />
         <span>Listed 14+ days</span>
+      </label>
+      <label class="card-check" title="Offers that expire within 3 days">
+        <input type="checkbox" id="offerExpiring" />
+        <span>Expiring soon</span>
       </label>
       <select id="offerSort" aria-label="Sort">
         <option value="days-desc">Longest listed first</option>
@@ -69,8 +74,10 @@
             <th></th>
             <th>Offer</th>
             <th>Price</th>
+            <th title="Other sellers' live listings: same type, total-level bracket and combat bracket">Market</th>
             <th>State</th>
             <th>Listed</th>
+            <th title="Opt in: -5% at 14 days listed, then every 7 days, never below 75% of today's price">Auto-drop</th>
             <th></th>
           </tr>
         </thead>

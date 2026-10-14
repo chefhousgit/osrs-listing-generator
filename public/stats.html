@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stats · OSRS Listing Generator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>OSRS Listing Generator</h1>
+    <nav class="topnav">
+      <a href="/">Listing generator</a>
+      <a href="/offers.html">Offers</a>
+      <a href="/orders.html">Orders</a>
+      <a href="/stats.html" class="active">Stats</a>
+    </nav>
+  </header>
+
+  <main class="container offers-page stats-page">
+    <section id="statsStatus" class="status-box hidden"></section>
+
+    <section id="statTiles" class="stat-tiles"></section>
+
+    <section class="stats-panel">
+      <header class="stats-panel-head">
+        <h3>Revenue per week</h3>
+        <span id="weekNote" class="offers-count"></span>
+      </header>
+      <div id="weekChart" class="week-chart" role="img" aria-label="Revenue per week"></div>
+      <div id="weekTip" class="chart-tip hidden"></div>
+      <details class="stats-table-toggle">
+        <summary>Show as table</summary>
+        <table class="offers-table stats-table" id="weekTable"></table>
+      </details>
+    </section>
+
+    <section class="stats-grid">
+      <div class="stats-panel">
+        <header class="stats-panel-head"><h3>By account type</h3></header>
+        <table class="offers-table stats-table" id="typeTable"></table>
+      </div>
+      <div class="stats-panel">
+        <header class="stats-panel-head"><h3>By total level</h3></header>
+        <table class="offers-table stats-table" id="bracketTable"></table>
+      </div>
+    </section>
+
+    <p id="statsFoot" class="hint stats-foot"></p>
+  </main>
+
+  <script src="stats.js"></script>
+</body>
+</html>

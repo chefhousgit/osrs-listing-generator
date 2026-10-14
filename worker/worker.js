@@ -1,4 +1,4 @@
-import { runAlerts, sendTests } from './alerts.js';
+import { runAlerts, sendTests, setAutoDrop } from './alerts.js';
 
 export default {
   async fetch(request, env) {
@@ -15,10 +15,28 @@ export default {
 
     // Manual run of the Discord alerts (same as the cron), ?summary=1 also sends the daily summary.
     // /alerts/test posts one sample message to each webhook.
-    // When the 24/7 checks first saw each offer (for "days listed" in the app's offers manager).
+    const json = (data) => new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json" } });
+
+    // For the app's Offers page: when the 24/7 checks first saw each offer, and the auto-drop plan.
     if (url.pathname === "/alerts/offers-age") {
       const firstSeen = (await env.STATE.get("offers", "json")) || {};
-      return new Response(JSON.stringify({ firstSeen }), { headers: { "Content-Type": "application/json" } });
+      const autodrop = (await env.STATE.get("autodrop", "json")) || {};
+      return json({ firstSeen, autodrop });
+    }
+
+    // Opt an offer in/out of auto price drops: { offerId, enabled, base }.
+    if (url.pathname === "/alerts/autodrop") {
+      const body = await request.json().catch(() => ({}));
+      if (!body.offerId || (body.enabled && !(Number(body.base) > 0))) return new Response("Bad request", { status: 400 });
+      return json(await setAutoDrop(env, body));
+    }
+
+    // Account folder counts from the app, for the daily summary: { waiting, listed, sold }.
+    if (url.pathname === "/alerts/stock") {
+      const body = await request.json().catch(() => ({}));
+      const stock = { waiting: Number(body.waiting) || 0, listed: Number(body.listed) || 0, sold: Number(body.sold) || 0, at: new Date().toISOString() };
+      await env.STATE.put("stock", JSON.stringify(stock));
+      return json({ ok: true, stock });
     }
 
     if (url.pathname === "/alerts/run" || url.pathname === "/alerts/test") {

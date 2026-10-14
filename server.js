@@ -7,6 +7,8 @@ const eldorado = require('./eldorado');
 const folders = require('./folders');
 const discord = require('./discord');
 const orders = require('./orders');
+const market = require('./market');
+const stats = require('./stats');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -774,14 +776,33 @@ app.get('/discord/test', async (req, res) => {
 
 // ---------- Offers manager (public/offers.html) ----------
 // Days listed come from the Worker's records (when it first saw each offer), if it's reachable.
+// Calls to the Worker's /alerts/* routes (same proxy secret as /generate).
+async function worker(path, body) {
+  if (!PROXY_URL || !PROXY_SECRET) throw new Error('PROXY_URL / PROXY_SECRET are not set in .env.');
+  const r = await fetch(PROXY_URL.replace(/\/+$/, '') + path, {
+    method: 'POST',
+    headers: { 'X-Proxy-Secret': PROXY_SECRET, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if (!r.ok) throw new Error(`Worker ${path} failed (${r.status})`);
+  return r.json();
+}
+
 async function offerAges() {
-  if (!PROXY_URL || !PROXY_SECRET) return {};
   try {
-    const r = await fetch(PROXY_URL.replace(/\/+$/, '') + '/alerts/offers-age', { method: 'POST', headers: { 'X-Proxy-Secret': PROXY_SECRET } });
-    return r.ok ? (await r.json()).firstSeen || {} : {};
+    const d = await worker('/alerts/offers-age');
+    return { firstSeen: d.firstSeen || {}, autodrop: d.autodrop || {} };
   } catch (e) {
-    return {};
+    return { firstSeen: {}, autodrop: {} };
   }
+}
+
+// Same rule as the Worker: listed at the earlier of first seen and (expiry - 21 days).
+function listedSince(offer, firstSeen) {
+  const seen = firstSeen[offer.id] ? Date.parse(firstSeen[offer.id]) : Infinity;
+  const fromExpiry = offer.expires ? Date.parse(offer.expires) - 21 * 86400000 : Infinity;
+  const t = Math.min(seen, fromExpiry);
+  return Number.isFinite(t) ? t : null;
 }
 
 function offerRoute(handler) {
@@ -798,14 +819,26 @@ function offerRoute(handler) {
 }
 
 app.get('/eldorado/offers', offerRoute(async () => {
-  const [offers, firstSeen] = await Promise.all([eldorado.listOffers(), offerAges()]);
+  const [offers, { firstSeen, autodrop }] = await Promise.all([eldorado.listOffers(), offerAges()]);
   const now = Date.now();
   offers.forEach((o) => {
-    o.firstSeen = firstSeen[o.id] || null;
-    o.daysListed = o.firstSeen ? Math.floor((now - Date.parse(o.firstSeen)) / 86400000) : null;
+    const since = listedSince(o, firstSeen);
+    o.daysListed = since ? Math.floor((now - since) / 86400000) : null;
+    o.expiresInDays = o.expires ? Math.ceil((Date.parse(o.expires) - now) / 86400000) : null;
+    o.autodrop = autodrop[o.id] || null;
   });
-  return { offers, agesAvailable: Object.keys(firstSeen).length > 0 };
+  return { offers, agesAvailable: offers.some((o) => o.daysListed != null) };
 }));
+// Competitor prices for each offer (see market.js); separate so the table shows first.
+app.get('/eldorado/market', offerRoute(async () => ({ market: await market.marketFor(await eldorado.listOffers()) })));
+// Opt an offer in / out of the Worker's auto price drops.
+app.post('/eldorado/offers/:id/autodrop', express.json(), offerRoute((req) => worker('/alerts/autodrop', {
+  offerId: req.params.id,
+  enabled: Boolean(req.body && req.body.enabled),
+  base: Number(req.body && req.body.base)
+})));
+// Sales stats (see stats.js).
+app.get('/stats', offerRoute(() => stats.compute()));
 app.post('/eldorado/offers/:id/price', express.json(), offerRoute((req) => eldorado.changePrice(req.params.id, req.body && req.body.price)));
 app.post('/eldorado/offers/:id/pause', offerRoute(async (req) => { await eldorado.pauseOffer(req.params.id); return { state: 'Paused' }; }));
 app.post('/eldorado/offers/:id/resume', offerRoute(async (req) => { await eldorado.resumeOffer(req.params.id); return { state: 'Active' }; }));
@@ -883,6 +916,7 @@ app.post('/eldorado/publish', publishUpload, async (req, res) => {
   }
 });
 
+orders.onStock((counts) => worker('/alerts/stock', counts)); // folder counts for the daily summary
 orders.start(); // hourly Listed -> Sold folder sync while the app runs
 
 app.listen(PORT, () => {

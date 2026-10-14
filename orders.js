@@ -10,6 +10,7 @@ const SOLD_STATES = ['Paid', 'Delivered', 'Received', 'Completed', 'PendingRevie
 const SYNC_EVERY = 60 * 60 * 1000;
 
 let lastSync = null; // { at, moves: [...], error }
+let reportStock = null; // set by server.js: (counts) => Promise, sends folder counts to the Worker
 let running = null;
 
 function enabled() {
@@ -55,6 +56,15 @@ async function sync() {
       lastSync = { at: new Date().toISOString(), moves, error: err.message };
     }
     moves.forEach((m) => console.log(`Orders sync: "${m.folder}" moved to ${m.to}`));
+    // Folder counts for the daily Discord summary.
+    if (reportStock) {
+      try {
+        const [waiting, listed, sold] = await Promise.all([folders.listFolders(), folders.listedFolders(), folders.soldFolders()]);
+        await reportStock({ waiting: waiting.length, listed: listed.length, sold: sold.length });
+      } catch (err) {
+        console.error('Stock report failed:', err.message);
+      }
+    }
     return lastSync;
   })();
   try {
@@ -105,4 +115,4 @@ function start() {
   setInterval(sync, SYNC_EVERY);
 }
 
-module.exports = { sync, ordersWithFolders, handover, link, start, enabled, getLastSync: () => lastSync };
+module.exports = { sync, ordersWithFolders, handover, link, start, enabled, getLastSync: () => lastSync, onStock: (fn) => { reportStock = fn; } };

@@ -117,6 +117,13 @@ With Eldorado set up, the **Offers** link at the top opens a page with all your 
 - Per offer: change the **price** (type it, then Save or Enter), **Pause / Resume**, **Edit** the title and description, **Delete** (click twice to confirm).
 - Editing text keeps everything else: the app reads the offer and its delivery details, changes only the title and description, sends the rest back as it was, then reads it again and warns you if anything else changed.
 - **Bulk**: tick offers (or the header box for all shown) to pause, resume or delete them together, or change their prices by - %, + %, - $, + $ or set a price: **Preview** shows the new prices, **Apply prices** saves them one by one.
+- **Market**: Eldorado has no market value for OSRS accounts, so each offer is compared with other sellers' live listings of the same type, total-level bracket and combat bracket (your own listings left out): the median, how many listings, and the middle half of their prices. Fewer than 3 matches widens it to type + total bracket, marked **rough**. The % gap is only highlighted for close matches with 10+ listings; otherwise it says **few listings**. **Use median** fills the price box (press Save to apply).
+- **Listed / expires**: days listed (the earlier of when the 24/7 Worker first saw the offer and its expiry date minus 21 days) and how long until the offer expires. **Expiring soon** filters to offers expiring within 3 days. Eldorado's API can't renew offers, so renew those on the site.
+- **Auto-drop** (opt-in per offer): from 14 days listed, -5% every 7 days, never below 75% of the price it had when you ticked it. The 24/7 Worker applies it (checked hourly) and posts each drop to #listed. A price you lowered yourself below the schedule is left alone.
+
+## Stats
+
+The **Stats** link at the top shows your account sales from Eldorado: totals, revenue (all time, last 7 and 30 days), average price, revenue per week (hover a bar for details, or **Show as table**), and breakdowns by account type and total-level bracket. Sales under $5 (e.g. $0.50 logins) are counted separately as small items. **Days to sell** fills in as accounts listed through the app sell (from their `listing.json` and `sale.json`).
 
 ## Orders and the Sold folder
 
@@ -133,11 +140,11 @@ Five channels, one webhook each (channel settings > Integrations > Webhooks > Ne
 
 | Channel | What | Sent by |
 |---|---|---|
-| `#listed` | Every offer the app creates, with the listing card, type, total level, price, delivery and offer ID | the app, while it runs |
-| `#errors` | Publish failed, offer left live (@here), folder not moved, no login details sent; Eldorado rejecting the API credentials or credentials about to expire | the app and the Worker |
+| `#listed` | Every offer the app creates, with the listing card, type, total level, price, delivery and offer ID; auto price drops (from the Worker, if `DISCORD_WEBHOOK_LISTED` is also set as a Worker secret, otherwise in #summary) | the app, while it runs, and the Worker |
+| `#errors` | Publish failed, offer left live (@here), folder not moved, no login details sent; Eldorado rejecting the API credentials or credentials about to expire; an offer expiring within 2 days | the app and the Worker |
 | `#sales` | New orders, cancellations, completed orders | the Worker, 24/7 |
 | `#disputes` | Disputes, with @here and the reason (go to `#sales` until this webhook is set) | the Worker, 24/7 |
-| `#summary` | Once a day: listed / sold / revenue in the last 24h, stock, accounts listed 14+ days with no sale | the Worker, 24/7 |
+| `#summary` | Once a day: listed / sold / revenue in the last 24h, sold this week, offers on Eldorado, account folders (waiting / Listed / Sold, sent by the app), accounts listed 14+ days with no sale, offers expiring within 3 days | the Worker, 24/7 |
 
 No login details, 2FA keys or buyer information are ever posted.
 
@@ -192,6 +199,8 @@ osrs-listing-generator/
 ├── eldorado.js            Eldorado seller API client: token cache, offer payload, create + pause
 ├── discord.js             Discord webhooks from the app (#listed, #errors)
 ├── orders.js              Matches sales to account folders; hourly Listed -> Sold sync
+├── market.js              Competitor price check for the Offers page
+├── stats.js               Sales stats for the Stats page
 ├── folders.js             ACCOUNTS_DIR account folders: name/type/ban from the folder name, screenshots, the .txt login file, move to Listed
 ├── data/
 │   └── eldorado-osrs.json OSRS account builds and required offer attributes on Eldorado
@@ -203,6 +212,7 @@ osrs-listing-generator/
 │   ├── eldorado.js        Publish to Eldorado panel
 │   ├── offers.html/.js    Offers manager page
 │   ├── orders.html/.js    Orders page (handover message, mark delivered, folder links)
+│   ├── stats.html/.js     Stats page
 │   ├── handover.js        Buyer handover message template (shared)
 │   └── redact.js          Skill blackout tool (calibrated skills grid + free-hand boxes)
 ├── worker/
