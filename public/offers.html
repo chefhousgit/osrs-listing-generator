@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offers · OSRS Listing Generator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>OSRS Listing Generator</h1>
+    <nav class="topnav">
+      <a href="/">Listing generator</a>
+      <a href="/offers.html" class="active">Offers</a>
+    </nav>
+  </header>
+
+  <main class="container offers-page">
+    <section class="offers-toolbar">
+      <input type="search" id="offerSearch" placeholder="Search title..." autocomplete="off" />
+      <select id="offerState" aria-label="State">
+        <option value="">All states</option>
+        <option value="Active">Active</option>
+        <option value="Paused">Paused</option>
+      </select>
+      <label class="card-check" title="Offers the 24/7 worker has seen for 14 days or more">
+        <input type="checkbox" id="offerStale" />
+        <span>Listed 14+ days</span>
+      </label>
+      <select id="offerSort" aria-label="Sort">
+        <option value="days-desc">Longest listed first</option>
+        <option value="days-asc">Newest first</option>
+        <option value="price-desc">Price: high to low</option>
+        <option value="price-asc">Price: low to high</option>
+        <option value="title">Title A-Z</option>
+      </select>
+      <button type="button" id="offerRefresh" class="secondary-btn">Refresh</button>
+      <span id="offerCount" class="offers-count"></span>
+    </section>
+
+    <section id="bulkBar" class="bulk-bar hidden">
+      <strong id="bulkCount"></strong>
+      <button type="button" id="bulkPause" class="secondary-btn">Pause</button>
+      <button type="button" id="bulkResume" class="secondary-btn">Resume</button>
+      <button type="button" id="bulkDelete" class="secondary-btn danger-btn">Delete</button>
+      <span class="bulk-sep"></span>
+      <span>Price</span>
+      <select id="bulkMode" aria-label="Price change">
+        <option value="pct-down">- %</option>
+        <option value="pct-up">+ %</option>
+        <option value="amt-down">- $</option>
+        <option value="amt-up">+ $</option>
+        <option value="set">set to $</option>
+      </select>
+      <input type="text" id="bulkAmount" inputmode="decimal" placeholder="e.g. 10" />
+      <button type="button" id="bulkPreview" class="secondary-btn">Preview</button>
+      <button type="button" id="bulkApply" class="primary-btn" disabled>Apply prices</button>
+      <button type="button" id="bulkClear" class="link-btn">Clear selection</button>
+    </section>
+
+    <section id="offerStatus" class="status-box hidden"></section>
+
+    <section class="offers-table-wrap">
+      <table class="offers-table">
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="offerAll" aria-label="Select all shown" /></th>
+            <th></th>
+            <th>Offer</th>
+            <th>Price</th>
+            <th>State</th>
+            <th>Listed</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="offerRows"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="offers.js"></script>
+</body>
+</html>

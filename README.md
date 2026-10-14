@@ -109,6 +109,15 @@ There is no Eldorado sandbox: every publish creates a real offer on your account
 
 The app only uses information visible in your screenshots or returned by the hiscores. Numbers are reported exactly or omitted; nothing is rounded up or invented. If a number looks off, open the **Debug** panel under the listing to see what the model claims to have read.
 
+## Offers manager
+
+With Eldorado set up, the **Offers** link at the top opens a page with all your account offers on Eldorado:
+
+- **Search**, filter by state (Active / Paused) or **Listed 14+ days**, and sort by days listed or price. Days listed come from the 24/7 Worker's records.
+- Per offer: change the **price** (type it, then Save or Enter), **Pause / Resume**, **Edit** the title and description, **Delete** (click twice to confirm).
+- Editing text keeps everything else: the app reads the offer and its delivery details, changes only the title and description, sends the rest back as it was, then reads it again and warns you if anything else changed.
+- **Bulk**: tick offers (or the header box for all shown) to pause, resume or delete them together, or change their prices by - %, + %, - $, + $ or set a price: **Preview** shows the new prices, **Apply prices** saves them one by one.
+
 ## Discord alerts (optional)
 
 Five channels, one webhook each (channel settings > Integrations > Webhooks > New Webhook > Copy Webhook URL):
@@ -182,6 +191,7 @@ osrs-listing-generator/
 │   ├── style.css          Dark OSRS-flavored theme
 │   ├── app.js             Frontend logic: uploads, options, gear drawer, results
 │   ├── eldorado.js        Publish to Eldorado panel
+│   ├── offers.html/.js    Offers manager page
 │   └── redact.js          Skill blackout tool (calibrated skills grid + free-hand boxes)
 ├── worker/
 │   ├── worker.js          Cloudflare Worker: Claude proxy + cron entry point

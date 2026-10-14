@@ -15,6 +15,12 @@ export default {
 
     // Manual run of the Discord alerts (same as the cron), ?summary=1 also sends the daily summary.
     // /alerts/test posts one sample message to each webhook.
+    // When the 24/7 checks first saw each offer (for "days listed" in the app's offers manager).
+    if (url.pathname === "/alerts/offers-age") {
+      const firstSeen = (await env.STATE.get("offers", "json")) || {};
+      return new Response(JSON.stringify({ firstSeen }), { headers: { "Content-Type": "application/json" } });
+    }
+
     if (url.pathname === "/alerts/run" || url.pathname === "/alerts/test") {
       try {
         const result = url.pathname === "/alerts/test"

@@ -771,6 +771,46 @@ app.get('/discord/test', async (req, res) => {
     : 'No DISCORD_WEBHOOK_LISTED / DISCORD_WEBHOOK_ERRORS in .env on this PC.');
 });
 
+// ---------- Offers manager (public/offers.html) ----------
+// Days listed come from the Worker's records (when it first saw each offer), if it's reachable.
+async function offerAges() {
+  if (!PROXY_URL || !PROXY_SECRET) return {};
+  try {
+    const r = await fetch(PROXY_URL.replace(/\/+$/, '') + '/alerts/offers-age', { method: 'POST', headers: { 'X-Proxy-Secret': PROXY_SECRET } });
+    return r.ok ? (await r.json()).firstSeen || {} : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function offerRoute(handler) {
+  return async (req, res) => {
+    if (!eldorado.isConfigured()) return res.status(500).json({ error: 'Eldorado API is not set up in .env.' });
+    try {
+      res.json(await handler(req));
+    } catch (err) {
+      console.error('Eldorado offers:', err.message);
+      const status = err instanceof eldorado.EldoradoError && err.status >= 400 && err.status < 600 ? err.status : 500;
+      res.status(status).json({ error: err.message });
+    }
+  };
+}
+
+app.get('/eldorado/offers', offerRoute(async () => {
+  const [offers, firstSeen] = await Promise.all([eldorado.listOffers(), offerAges()]);
+  const now = Date.now();
+  offers.forEach((o) => {
+    o.firstSeen = firstSeen[o.id] || null;
+    o.daysListed = o.firstSeen ? Math.floor((now - Date.parse(o.firstSeen)) / 86400000) : null;
+  });
+  return { offers, agesAvailable: Object.keys(firstSeen).length > 0 };
+}));
+app.post('/eldorado/offers/:id/price', express.json(), offerRoute((req) => eldorado.changePrice(req.params.id, req.body && req.body.price)));
+app.post('/eldorado/offers/:id/pause', offerRoute(async (req) => { await eldorado.pauseOffer(req.params.id); return { state: 'Paused' }; }));
+app.post('/eldorado/offers/:id/resume', offerRoute(async (req) => { await eldorado.resumeOffer(req.params.id); return { state: 'Active' }; }));
+app.delete('/eldorado/offers/:id', offerRoute(async (req) => { await eldorado.deleteOffer(req.params.id); return { deleted: true }; }));
+app.post('/eldorado/offers/:id/text', express.json({ limit: '100kb' }), offerRoute((req) => eldorado.updateOfferText(req.params.id, req.body && req.body.title, req.body && req.body.description)));
+
 app.get('/eldorado/config', (req, res) => {
   res.json({
     configured: eldorado.isConfigured(),

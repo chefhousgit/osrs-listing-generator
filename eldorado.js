@@ -219,10 +219,139 @@ async function publishPausedAccountOffer(input, mainImage, extraImages = []) {
   }
 }
 
+// ---------- offers manager ----------
+const IMAGE_BASE = 'https://fileserviceusprod.blob.core.windows.net/offerimages/';
+const enc = encodeURIComponent;
+
+// Exact total level when it fits the bracket; offers made on the site often carry the placeholder
+// minimum (32) as the exact value, so then the bracket (e.g. 1000-1499) is shown instead.
+function totalLevel(numeric, select) {
+  const bracket = select && select.value ? select.value.name : '';
+  const n = numeric && typeof numeric.value === 'number' ? numeric.value : null;
+  const m = bracket.match(/^(\d+)\s*-\s*(\d+)$/);
+  if (n !== null && (!m || (n >= Number(m[1]) && n <= Number(m[2])))) return n;
+  return bracket;
+}
+
+function summarizeOffer(o) {
+  const attr = (id) => (o.attributes || []).find((a) => a.id === id);
+  const type = attr('osrs-account-type');
+  const totalNum = attr('osrs-total-level-numeric');
+  const totalSel = attr('osrs-total-level');
+  const img = o.mainOfferImage || {};
+  return {
+    id: o.id,
+    title: o.offerTitle || '',
+    description: o.description || '',
+    state: o.offerState,
+    price: o.pricePerUnit ? o.pricePerUnit.amount : null,
+    currency: o.pricePerUnit ? o.pricePerUnit.currency : 'USD',
+    delivery: o.guaranteedDeliveryTime,
+    type: type && type.value ? type.value.name : '',
+    total: totalLevel(totalNum, totalSel),
+    image: img.smallImage ? IMAGE_BASE + img.smallImage : null,
+    imageLarge: img.largeImage ? IMAGE_BASE + img.largeImage : null,
+    expires: o.expireDate || null
+  };
+}
+
+// Every account offer (active and paused), all pages.
+async function listOffers() {
+  const base = '/api/flexibleOffers/me/search?category=Account&pageSize=50';
+  const first = await api('GET', base);
+  const all = [...(first.results || [])];
+  const start = Number(first.pageIndex) || 0;
+  for (let n = 1; n < Math.min(Number(first.totalPages) || 1, 20); n++) {
+    const page = await api('GET', `${base}&pageIndex=${start + n}`);
+    all.push(...(page.results || []));
+  }
+  return all.map(summarizeOffer);
+}
+
+async function changePrice(id, amount) {
+  const value = Math.round(Number(amount) * 100) / 100;
+  if (!Number.isFinite(value) || value <= 0) throw new EldoradoError('Price must be a number above 0.', 400);
+  await api('PUT', `/api/flexibleOffersUser/me/${enc(id)}/changePrice`, { amount: value, currency: 'USD' });
+  return { price: value };
+}
+
+const pauseOffer = (id) => api('PUT', `/api/flexibleOffersUser/me/${enc(id)}/pause`);
+const resumeOffer = (id) => api('PUT', `/api/flexibleOffersUser/me/${enc(id)}/resume`);
+const deleteOffer = (id) => api('DELETE', `/api/flexibleOffersUser/me/${enc(id)}`);
+
+// The attribute list in the shape the update / create requests take.
+function attributesForUpdate(attributes) {
+  return (attributes || []).map((a) => (a.type === 'Numeric'
+    ? { id: a.id, type: 'Numeric', value: a.value }
+    : { id: a.id, type: 'Select', values: a.value && a.value.id ? [a.value.id] : (a.values || []).map((v) => v.id) }));
+}
+
+// Eldorado's details update replaces the whole offer, so read everything first (offer, delivery
+// details), change only the title / description, send the rest back as it was, then read it again
+// to confirm nothing else changed. Delivery details only pass through this process in memory.
+async function updateOfferText(id, title, description) {
+  title = str(title, 300);
+  description = str(description, 5000);
+  if (!title || !description) throw new EldoradoError('Title and description are both required.', 400);
+
+  const before = (await api('GET', `/api/flexibleOffers/${enc(id)}/private`)).offer;
+  const secrets = (await api('GET', `/api/flexibleOffersUser/me/offers/${enc(id)}/secretDetails`)) || [];
+  const tradeEnv = (before.tradeEnvironmentValues || [])[0];
+
+  const update = {
+    details: {
+      offerTitle: title,
+      description,
+      mainOfferImage: before.mainOfferImage,
+      offerImages: before.offerImages || [],
+      guaranteedDeliveryTime: before.guaranteedDeliveryTime,
+      pricing: {
+        quantity: before.quantity,
+        minQuantity: before.minQuantity || 1,
+        volumeDiscounts: before.volumeDiscounts || [],
+        pricePerUnit: before.pricePerUnit
+      },
+      hasOriginalEmail: before.hasOriginalEmail
+    },
+    augmentedGame: {
+      gameId: before.gameId,
+      category: before.category,
+      tradeEnvironmentId: tradeEnv ? tradeEnv.id : null,
+      offerAttributes: attributesForUpdate(before.attributes)
+    },
+    accountDetails: secrets.filter((d) => d.legacySecretDetails).map((d) => ({ id: d.id, secretDetails: d.legacySecretDetails })),
+    accountDeliveryDetails: secrets.filter((d) => d.structuredDetails).map((d) => ({
+      id: d.id,
+      accountDetails: d.structuredDetails.accountDetails,
+      emailDetails: d.structuredDetails.emailDetails || null,
+      mfaDetails: d.structuredDetails.mfaDetails || null,
+      additionalInfo: d.structuredDetails.additionalInfo || null
+    }))
+  };
+  await api('PUT', `/api/flexibleOffers/account/${enc(id)}/details`, update);
+
+  // Check what Eldorado now holds.
+  const after = (await api('GET', `/api/flexibleOffers/${enc(id)}/private`)).offer;
+  const secretsAfter = (await api('GET', `/api/flexibleOffersUser/me/offers/${enc(id)}/secretDetails`)) || [];
+  const warnings = [];
+  if (after.offerTitle !== title) warnings.push('the title did not change');
+  if ((after.description || '') !== description) warnings.push('the description did not change');
+  if (JSON.stringify(attributesForUpdate(after.attributes)) !== JSON.stringify(attributesForUpdate(before.attributes))) warnings.push('the offer fields (type, levels...) changed');
+  if (secretsAfter.length !== secrets.length) warnings.push(`delivery details went from ${secrets.length} to ${secretsAfter.length}`);
+  if (after.pricePerUnit && before.pricePerUnit && after.pricePerUnit.amount !== before.pricePerUnit.amount) warnings.push('the price changed');
+  return { offer: summarizeOffer(after), warnings };
+}
+
 module.exports = {
   OSRS,
   DELIVERY_TIMES,
   EldoradoError,
   isConfigured,
-  publishPausedAccountOffer
+  publishPausedAccountOffer,
+  listOffers,
+  changePrice,
+  pauseOffer,
+  resumeOffer,
+  deleteOffer,
+  updateOfferText
 };
