@@ -1,7 +1,7 @@
 // Sales stats for the Stats page (public/stats.html), from your Eldorado order history (account
 // sales of SMALL_ITEM_PRICE or more, canceled orders left out; cheaper ones like $0.50 logins are
 // counted separately as small items) plus the Sold folder's sale.json / listing.json for
-// days-to-sell. Cached for 10 minutes.
+// days-to-sell. Cached for 10 minutes. Also the buyer reviews for the Reviews page (public/reviews.html).
 
 const eldorado = require('./eldorado');
 const folders = require('./folders');
@@ -51,9 +51,61 @@ async function daysToSell() {
   }
 }
 
+// Order history from Eldorado, shared by the Stats and Reviews pages (one fetch per 10 minutes).
+let history = null;
+async function orderHistory() {
+  if (history && Date.now() - history.at < CACHE_FOR) return history.orders;
+  const orders = await eldorado.listAllOrders(500);
+  history = { at: Date.now(), orders };
+  return orders;
+}
+
+// Reviews page: buyer feedback on account sales, newest first, with totals by tag and account type.
+async function reviews() {
+  const all = await orderHistory();
+  const sales = all.filter((o) => o.category === 'Account' && o.state !== 'Canceled' && o.price > 0);
+  const reviewed = sales.filter((o) => o.review);
+  const positive = reviewed.filter((o) => o.review.rating === 'Positive').length;
+  const now = Date.now();
+  const recent = reviewed.filter((o) => now - Date.parse(o.createdDate) < 30 * DAY);
+  const recentPositive = recent.filter((o) => o.review.rating === 'Positive').length;
+
+  const tags = new Map();
+  reviewed.forEach((o) => o.review.tags.forEach((t) => {
+    const g = tags.get(t) || { tag: t, positive: 0, negative: 0 };
+    g[o.review.rating === 'Positive' ? 'positive' : 'negative']++;
+    tags.set(t, g);
+  }));
+
+  const types = new Map();
+  sales.forEach((o) => {
+    const key = o.type || 'Unknown';
+    const g = types.get(key) || { key, sales: 0, positive: 0, negative: 0 };
+    g.sales++;
+    if (o.review) g[o.review.rating === 'Positive' ? 'positive' : 'negative']++;
+    types.set(key, g);
+  });
+
+  return {
+    totals: {
+      sales: sales.length,
+      reviewed: reviewed.length,
+      positive,
+      negative: reviewed.length - positive,
+      positivePct: reviewed.length ? round2((positive / reviewed.length) * 100) : null,
+      last30: { reviewed: recent.length, positivePct: recent.length ? round2((recentPositive / recent.length) * 100) : null },
+      withMessage: reviewed.filter((o) => o.review.message).length
+    },
+    tags: [...tags.values()].sort((a, b) => (b.positive + b.negative) - (a.positive + a.negative)),
+    byType: [...types.values()].sort((a, b) => b.sales - a.sales),
+    reviews: reviewed.map((o) => ({ id: o.id, title: o.title, price: o.price, createdDate: o.createdDate, type: o.type, image: o.image, ...o.review })),
+    capped: all.length >= 500
+  };
+}
+
 async function compute() {
   if (cached && Date.now() - cached.at < CACHE_FOR) return cached.data;
-  const all = await eldorado.listAllOrders(500);
+  const all = await orderHistory();
   const paid = all.filter((o) => o.category === 'Account' && o.state !== 'Canceled' && o.price > 0);
   const sales = paid.filter((o) => o.price >= SMALL_ITEM_PRICE);
   const small = paid.filter((o) => o.price < SMALL_ITEM_PRICE);
@@ -92,4 +144,4 @@ async function compute() {
   return data;
 }
 
-module.exports = { compute };
+module.exports = { compute, reviews };

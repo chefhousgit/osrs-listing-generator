@@ -2100,3 +2100,78 @@ html, body {
 .stats-foot {
   margin-top: 4px;
 }
+
+/* ---------- Reviews ---------- */
+.review-badge {
+  display: inline-block;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+.review-badge.positive { color: #b9e6b9; border-color: #3f6b3f; }
+.review-badge.negative { color: #f5b4b2; border-color: #6b3330; }
+
+.review-text {
+  min-width: 260px;
+  max-width: 520px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Settings ---------- */
+.settings-page {
+  max-width: 860px;
+}
+
+.settings-field {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.settings-line {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-line input {
+  flex: 1 1 320px;
+  min-width: 0;
+  background: var(--bg-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-family: Consolas, "Cascadia Mono", monospace;
+}
+
+.settings-where {
+  font-size: 0.85rem;
+  margin-top: 6px;
+  word-break: break-all;
+}
+
+.settings-where.ok { color: #b9e6b9; }
+.settings-where.missing { color: #f5b4b2; }
+.settings-where.pending { color: var(--text-dim); }
+
+.settings-page .secondary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}

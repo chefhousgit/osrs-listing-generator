@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Settings · OSRS Listing Generator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>OSRS Listing Generator</h1>
+    <nav class="topnav">
+      <a href="/">Listing generator</a>
+      <a href="/offers.html">Offers</a>
+      <a href="/orders.html">Orders</a>
+      <a href="/stats.html">Stats</a>
+      <a href="/reviews.html">Reviews</a>
+      <a href="/settings.html" class="active">Settings</a>
+    </nav>
+  </header>
+
+  <main class="container offers-page settings-page">
+    <section id="settingsStatus" class="status-box hidden"></section>
+
+    <form id="settingsForm" class="stats-panel" autocomplete="off">
+      <header class="stats-panel-head">
+        <h3>Account folders</h3>
+        <span class="offers-count">Saved to .env on this PC. No restart needed.</span>
+      </header>
+      <div id="settingsFields"></div>
+      <div class="settings-actions">
+        <button type="submit" id="settingsSave" class="primary-btn" disabled>Save</button>
+        <button type="button" id="settingsReset" class="secondary-btn" disabled>Undo changes</button>
+      </div>
+    </form>
+  </main>
+
+  <script src="settings.js"></script>
+</body>
+</html>

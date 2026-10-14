@@ -9,6 +9,7 @@ const discord = require('./discord');
 const orders = require('./orders');
 const market = require('./market');
 const stats = require('./stats');
+const settings = require('./settings');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -766,6 +767,29 @@ app.get('/folders/:name/login', async (req, res) => {
   }
 });
 
+// ---------- Settings (public/settings.html): folder paths in .env ----------
+// Only from this PC: the app listens on the whole network, and these change files and open dialogs.
+const LOOPBACK = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+function localOnly(req, res, next) {
+  if (LOOPBACK.includes(req.socket.remoteAddress)) return next();
+  res.status(403).json({ error: 'Settings can only be changed on the PC running the app.' });
+}
+const settingsRoute = (handler) => [localOnly, express.json(), async (req, res) => {
+  try {
+    res.json(await handler(req));
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+}];
+
+app.get('/settings', settingsRoute(() => settings.current()));
+app.post('/settings', settingsRoute(async (req) => {
+  const result = await settings.save(req.body && req.body.values);
+  orders.start(); // the hourly Sold sync, if it couldn't start before (no accounts folder)
+  return result;
+}));
+app.post('/settings/pick', settingsRoute(async (req) => ({ path: await settings.pickFolder(req.body && req.body.key, req.body && req.body.start) })));
+
 // One sample message to each Discord webhook set in .env (open in the browser to test).
 app.get('/discord/test', async (req, res) => {
   const sent = await discord.sendTests();
@@ -839,6 +863,7 @@ app.post('/eldorado/offers/:id/autodrop', express.json(), offerRoute((req) => wo
 })));
 // Sales stats (see stats.js).
 app.get('/stats', offerRoute(() => stats.compute()));
+app.get('/reviews', offerRoute(() => stats.reviews()));
 app.post('/eldorado/offers/:id/price', express.json(), offerRoute((req) => eldorado.changePrice(req.params.id, req.body && req.body.price)));
 app.post('/eldorado/offers/:id/pause', offerRoute(async (req) => { await eldorado.pauseOffer(req.params.id); return { state: 'Paused' }; }));
 app.post('/eldorado/offers/:id/resume', offerRoute(async (req) => { await eldorado.resumeOffer(req.params.id); return { state: 'Active' }; }));
@@ -917,6 +942,7 @@ app.post('/eldorado/publish', publishUpload, async (req, res) => {
 });
 
 orders.onStock((counts) => worker('/alerts/stock', counts)); // folder counts for the daily summary
+orders.onBackup((records) => worker('/alerts/backup', records)); // off-PC copy of listing.json / sale.json
 orders.start(); // hourly Listed -> Sold folder sync while the app runs
 
 app.listen(PORT, () => {

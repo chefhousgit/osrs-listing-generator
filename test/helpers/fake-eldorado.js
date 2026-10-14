@@ -197,6 +197,9 @@ function createFakeEldorado({ offers = [], secrets = {}, orders = [], quirks = {
     }
     if (method === 'PUT' && (m = p.match(/^\/api\/flexibleOffers\/account\/([^/]+)\/details$/))) return putDetails(decodeURIComponent(m[1]), body);
     if (method === 'PUT' && (m = p.match(/^\/api\/v1\/orders\/me\/([^/]+)\/deliver$/))) return deliver(decodeURIComponent(m[1]));
+    if (method === 'GET' && p === '/api/v1/orders/me/seller/orders') {
+      return json(200, { results: [...state.orders.values()], nextPageCursor: null });
+    }
 
     return problem(501, `fake-eldorado has no route for ${method} ${p}`);
   }

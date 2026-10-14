@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reviews · OSRS Listing Generator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>OSRS Listing Generator</h1>
+    <nav class="topnav">
+      <a href="/">Listing generator</a>
+      <a href="/offers.html">Offers</a>
+      <a href="/orders.html">Orders</a>
+      <a href="/stats.html">Stats</a>
+      <a href="/reviews.html" class="active">Reviews</a>
+      <a href="/settings.html">Settings</a>
+    </nav>
+  </header>
+
+  <main class="container offers-page stats-page">
+    <section id="reviewsStatus" class="status-box hidden"></section>
+
+    <section id="reviewTiles" class="stat-tiles"></section>
+
+    <section class="stats-grid">
+      <div class="stats-panel">
+        <header class="stats-panel-head"><h3>Tags buyers picked</h3></header>
+        <table class="offers-table stats-table" id="tagTable"></table>
+      </div>
+      <div class="stats-panel">
+        <header class="stats-panel-head"><h3>By account type</h3></header>
+        <table class="offers-table stats-table" id="reviewTypeTable"></table>
+      </div>
+    </section>
+
+    <section class="offers-toolbar">
+      <select id="reviewFilter" aria-label="Show">
+        <option value="">All reviews</option>
+        <option value="Negative">Negative only</option>
+        <option value="message">With a message</option>
+        <option value="changed">Rating changed</option>
+      </select>
+      <span id="reviewCount" class="offers-count"></span>
+    </section>
+
+    <section class="offers-table-wrap">
+      <table class="offers-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Order</th>
+            <th>Rating</th>
+            <th>Review</th>
+          </tr>
+        </thead>
+        <tbody id="reviewRows"></tbody>
+      </table>
+    </section>
+
+    <p id="reviewsFoot" class="hint stats-foot"></p>
+  </main>
+
+  <script src="reviews.js"></script>
+</body>
+</html>

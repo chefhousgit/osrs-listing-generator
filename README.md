@@ -75,11 +75,13 @@ Browser  →  Local Express server  →  Cloudflare Worker proxy  →  Anthropic
 
 ## Account folders (optional)
 
-Keep one folder per account you want to list inside a main folder, and point the app at it in `.env`:
+Keep one folder per account you want to list inside a main folder, and point the app at it on the **Settings** page (**Browse…** opens the Windows folder picker; **Save** applies it right away, no restart). Settings writes it to `.env`, so this works too:
 
 ```
 ACCOUNTS_DIR=C:\Users\you\Desktop\Accounts
 ```
+
+The Listed and Sold folders can be picked there as well (`LISTED_DIR`, `SOLD_DIR`); left empty they default to `Listed` inside the accounts folder and `Sold` next to it. Settings only opens on the PC running the app, not from other devices on your network.
 
 - **Folder name** = the account name (RSN), optionally followed by ` - <tag>` suffixes, in any order:
   - type: `hcim` or `hc` (HCIM), `uim`, `im` / `iron` (Ironman), `main`. No type tag = Auto (worked out from the hiscores).
@@ -125,6 +127,10 @@ With Eldorado set up, the **Offers** link at the top opens a page with all your 
 
 The **Stats** link at the top shows your account sales from Eldorado: totals, revenue (all time, last 7 and 30 days), average price, revenue per week (hover a bar for details, or **Show as table**), and breakdowns by account type and total-level bracket. Sales under $5 (e.g. $0.50 logins) are counted separately as small items. **Days to sell** fills in as accounts listed through the app sell (from their `listing.json` and `sale.json`).
 
+## Reviews
+
+The **Reviews** link at the top shows buyer feedback on your account sales: positive % (all time and last 30 days), negative count, how many sales got reviewed, the tags buyers picked, reviews by account type, and every review with its message (filter to negative only, with a message, or rating changed). New reviews also go to Discord (see `#reviews` below).
+
 ## Orders and the Sold folder
 
 The **Orders** link at the top lists your Eldorado sales (Open / Completed / Canceled / All), each with the account folder it belongs to:
@@ -133,10 +139,18 @@ The **Orders** link at the top lists your Eldorado sales (Open / Completed / Can
 - **Mark delivered** appears for orders still waiting on you (manual delivery). Instant-delivery orders are delivered by Eldorado itself.
 - **Sold folder**: when you publish, the account's folder gets a `listing.json` with its offer ID. Every hour while the app is open (and a minute after it starts), the app checks your orders: a sold account moves from Listed to **Sold** (next to the Listed folder, or `SOLD_DIR` in `.env`) with a `sale.json` (price, date, order); a canceled order moves it back to Listed. **Sync folders now** does it on demand.
 - Folders listed before this existed have no `listing.json`: for sales in the last 14 days, pick the folder under **Account folder** and press **Link** once.
+- **Backup**: the same hourly sync sends every Listed and Sold folder's `listing.json` / `sale.json` (offer ids, titles, prices, dates; never screenshots or logins) to the Worker when they changed. It keeps the latest copy per PC and one per day for 30 days. To get them back:
+  ```
+  npm run backup -- list
+  npm run backup -- pull
+  npm run backup -- restore backups\backup_<PC>_latest.json
+  npm run backup -- restore backups\backup_<PC>_latest.json --apply
+  ```
+  `pull` takes a key from `list` (default: this PC's latest). `restore` shows what it would write; `--apply` writes only `.json` files that are missing (it never overwrites), recreating gone folders with just their records so Orders and Stats keep their history.
 
 ## Discord alerts (optional)
 
-Five channels, one webhook each (channel settings > Integrations > Webhooks > New Webhook > Copy Webhook URL):
+Seven channels, one webhook each (channel settings > Integrations > Webhooks > New Webhook > Copy Webhook URL):
 
 | Channel | What | Sent by |
 |---|---|---|
@@ -145,6 +159,7 @@ Five channels, one webhook each (channel settings > Integrations > Webhooks > Ne
 | `#errors` | Publish failed, offer left live (@here), folder not moved, no login details sent; Eldorado rejecting the API credentials or credentials about to expire; an offer expiring within 2 days | the app and the Worker |
 | `#sales` | New orders, cancellations, completed orders | the Worker, 24/7 |
 | `#disputes` | Disputes, with @here and the reason (go to `#sales` until this webhook is set) | the Worker, 24/7 |
+| `#reviews` | New buyer reviews with their tags and message, @here on a negative one, and ratings that change later (go to `#sales` until `DISCORD_WEBHOOK_REVIEWS` is set) | the Worker, 24/7 |
 | `#summary` | Once a day: listed / sold / revenue in the last 24h, sold this week, offers on Eldorado, account folders (waiting / Listed / Sold, sent by the app), accounts listed 14+ days with no sale, offers expiring within 3 days | the Worker, 24/7 |
 
 No login details, 2FA keys or buyer information are ever posted.
@@ -166,6 +181,7 @@ DISCORD_WEBHOOK_ERRORS=https://discord.com/api/webhooks/...
    npx wrangler secret put DISCORD_WEBHOOK_SALES
    npx wrangler secret put DISCORD_WEBHOOK_DISPUTES
    npx wrangler secret put DISCORD_WEBHOOK_PRICE_DROPS
+   npx wrangler secret put DISCORD_WEBHOOK_REVIEWS
    npx wrangler secret put DISCORD_WEBHOOK_SUMMARY
    npx wrangler secret put DISCORD_WEBHOOK_ERRORS
    ```
@@ -192,7 +208,7 @@ The first run only remembers the orders and offers that already exist (no flood 
 
 ## Tests
 
-`npm test` runs offline checks for editing an offer's text and for marking an order delivered. Those two Eldorado calls haven't been tried on the live account. The tests swap `fetch` for a fake Eldorado (`test/helpers/fake-eldorado.js`) that refuses every other host, so nothing reaches Eldorado or Discord. When `docs/eldorado-seller-swagger.json` is present, the fake also checks each request body against Eldorado's own schema.
+`npm test` runs offline checks for editing an offer's text and marking an order delivered (two Eldorado calls not yet tried on the live account), the Worker's reviews feed and backup store, the folder backup and restore, the Reviews page numbers, and the Settings page's `.env` editing (on a scratch copy, never the real `.env`). The tests swap `fetch` for a fake Eldorado (`test/helpers/fake-eldorado.js`) that refuses every other host, so nothing reaches Eldorado or Discord. When `docs/eldorado-seller-swagger.json` is present, the fake also checks each request body against Eldorado's own schema.
 
 ## Project layout
 
@@ -206,7 +222,9 @@ osrs-listing-generator/
 ├── discord.js             Discord webhooks from the app (#listed, #errors)
 ├── orders.js              Matches sales to account folders; hourly Listed -> Sold sync
 ├── market.js              Competitor price check for the Offers page
-├── stats.js               Sales stats for the Stats page
+├── stats.js               Sales stats for the Stats page, buyer reviews for the Reviews page
+├── settings.js            Settings page: folder paths in .env, Windows folder picker
+├── scripts/backup.js      npm run backup: list / pull / restore the folder record backups
 ├── folders.js             ACCOUNTS_DIR account folders: name/type/ban from the folder name, screenshots, the .txt login file, move to Listed
 ├── data/
 │   └── eldorado-osrs.json OSRS account builds and required offer attributes on Eldorado
@@ -219,11 +237,14 @@ osrs-listing-generator/
 │   ├── offers.html/.js    Offers manager page
 │   ├── orders.html/.js    Orders page (handover message, mark delivered, folder links)
 │   ├── stats.html/.js     Stats page
+│   ├── reviews.html/.js   Reviews page
+│   ├── settings.html/.js  Settings page (account folder paths)
 │   ├── handover.js        Buyer handover message template (shared)
 │   └── redact.js          Skill blackout tool (calibrated skills grid + free-hand boxes)
 ├── worker/
 │   ├── worker.js          Cloudflare Worker: Claude proxy + cron entry point
-│   ├── alerts.js          24/7 Discord alerts from Eldorado (sales, disputes, daily summary)
+│   ├── alerts.js          24/7 Discord alerts from Eldorado (sales, disputes, reviews, daily summary)
+│   ├── backup.js          Stores the app's folder record backups in KV
 │   └── wrangler.toml      Worker deployment config
 └── README.md
 ```

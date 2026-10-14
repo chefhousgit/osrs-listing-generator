@@ -13,6 +13,9 @@ docs/eldorado-seller-swagger.json
 accounts*.txt
 login*.txt
 
+# Backups pulled from the Worker (npm run backup -- pull)
+backups/
+
 # Same file saved without the leading dot
 env
 *.env

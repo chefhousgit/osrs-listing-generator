@@ -388,10 +388,21 @@ async function listAllOrders(max = 500) {
     const attr = (id) => attrs.find((a) => a.attributeId === id);
     const type = attr('osrs-account-type');
     const bracket = attr('osrs-total-level');
+    const r = o.review;
     return {
       ...summarizeOrder(o),
       type: type ? (type.values || [])[0] || type.id : null,
-      bracket: bracket ? (bracket.values || [])[0] || bracket.id : null
+      bracket: bracket ? (bracket.values || [])[0] || bracket.id : null,
+      // Buyer feedback (no buyer name): rating Positive / Negative, null when not reviewed yet.
+      review: r && r.feedbackRating && r.feedbackRating !== 'Unrated'
+        ? {
+            rating: r.feedbackRating,
+            tags: r.feedbackTags || [],
+            message: r.reviewMessage || '',
+            hidden: r.isReviewMessageVisible === false,
+            changed: typeof r.wasInitialRatingPositive === 'boolean' && r.wasInitialRatingPositive !== (r.feedbackRating === 'Positive')
+          }
+        : null
     };
   });
 }

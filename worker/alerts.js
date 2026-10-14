@@ -5,6 +5,8 @@
 //   #summary  once a day at SUMMARY_HOUR in TIMEZONE: last 24h listed / sold / revenue, sold this
 //             week, stock (offers + the app's folder counts), stale and soon-expiring offers
 //   #price-drops auto price drops (DISCORD_WEBHOOK_PRICE_DROPS; falls back to #listed, then #summary)
+//   #reviews  new buyer reviews and changed ratings, @here on a negative one
+//             (DISCORD_WEBHOOK_REVIEWS; falls back to #sales)
 //   #errors   also: an offer expiring within EXPIRY_WARN_DAYS (once per offer)
 //
 // Auto price drops (opt-in per offer from the app's Offers page, stored in KV "autodrop"): from
@@ -37,7 +39,7 @@ const DROP_PCT = 0.05;
 const DROP_FLOOR = 0.75;
 const RATE_LIMIT_GRACE_HOURS = 3;
 
-const COLORS = { sale: 0x5cb85c, dispute: 0xd9534f, cancel: 0x888888, done: 0xe4b04a, summary: 0xe4b04a, alert: 0xd68f3c };
+const COLORS = { positive: 0x5cb85c, negative: 0xd9534f, sale: 0x5cb85c, dispute: 0xd9534f, cancel: 0x888888, done: 0xe4b04a, summary: 0xe4b04a, alert: 0xd68f3c };
 
 // ---------- Eldorado ----------
 async function getToken(env) {
@@ -96,6 +98,7 @@ async function getOffers(token) {
 const disputesHook = (env) => env.DISCORD_WEBHOOK_DISPUTES || env.DISCORD_WEBHOOK_SALES;
 const errorsHook = (env) => env.DISCORD_WEBHOOK_ERRORS || env.DISCORD_WEBHOOK_ALERTS;
 const priceDropsHook = (env) => env.DISCORD_WEBHOOK_PRICE_DROPS || env.DISCORD_WEBHOOK_LISTED || env.DISCORD_WEBHOOK_SUMMARY;
+const reviewsHook = (env) => env.DISCORD_WEBHOOK_REVIEWS || env.DISCORD_WEBHOOK_SALES;
 
 async function post(url, payload) {
   if (!url) return;
@@ -163,7 +166,8 @@ async function clearRateLimit(env, key) {
 const SOLD_STATES = ['Paid', 'Delivered', 'Received', 'Completed', 'PendingReview'];
 
 async function checkOrders(env, token) {
-  const orders = await getOrders(token, 25);
+  const orders = await getOrders(token, 50); // one request either way; 50 so late reviews are still seen
+  await announceReviews(env, orders);
   const seen = await env.STATE.get('orders', 'json');
   const next = Object.assign({}, seen || {});
   let changed = !seen;
@@ -203,6 +207,49 @@ async function checkOrders(env, token) {
     changed = true;
   }
   if (changed) await env.STATE.put('orders', JSON.stringify(next));
+}
+
+// ---------- reviews ----------
+// Buyer reviews come on the order (review.feedbackRating Positive / Negative / Unrated), often days
+// after the sale, so the latest 50 orders are checked every run. KV "reviews" remembers each order's
+// rating; the first run only records what's there. No buyer names are posted.
+const prettyTag = (tag) => ({ GGWP: 'GG WP', GOAT: 'GOAT', TOAD: 'TOAD' }[tag] || tag.replace(/([a-z])([A-Z])/g, '$1 $2'));
+
+export function reviewEmbed(order, before) {
+  const r = order.review;
+  const negative = r.feedbackRating === 'Negative';
+  const heading = before ? `Review changed (${before} → ${r.feedbackRating})` : (negative ? '👎 Negative review' : '👍 Positive review');
+  const embed = orderEmbed(order, heading, negative ? COLORS.negative : COLORS.positive);
+  embed.fields = embed.fields.filter((f) => f.name !== 'Status');
+  if (r.feedbackTags && r.feedbackTags.length) embed.fields.splice(1, 0, { name: 'Tags', value: r.feedbackTags.map(prettyTag).join(', '), inline: true });
+  if (r.reviewMessage) embed.description = (r.isReviewMessageVisible === false ? '(hidden on Eldorado) ' : '') + '“' + r.reviewMessage.slice(0, 1500) + '”';
+  embed.timestamp = new Date().toISOString();
+  return embed;
+}
+
+export async function announceReviews(env, orders) {
+  const seen = await env.STATE.get('reviews', 'json');
+  const next = Object.assign({}, seen || {});
+  let changed = !seen;
+  for (const order of orders.slice().reverse()) { // oldest first
+    const rating = order.review && order.review.feedbackRating;
+    if (!rating || rating === 'Unrated' || next[order.id] === rating) continue;
+    if (seen) {
+      await post(reviewsHook(env), {
+        ...(rating === 'Negative' ? { content: '@here', allowed_mentions: { parse: ['everyone'] } } : {}),
+        embeds: [reviewEmbed(order, next[order.id])]
+      });
+    }
+    next[order.id] = rating;
+    changed = true;
+  }
+  // Keep the remembered list small (oldest dropped first).
+  const ids = Object.keys(next);
+  if (ids.length > 500) {
+    ids.slice(0, ids.length - 400).forEach((id) => delete next[id]);
+    changed = true;
+  }
+  if (changed) await env.STATE.put('reviews', JSON.stringify(next));
 }
 
 // When an offer was listed: the earlier of when the checks first saw it and its expiry date minus
@@ -422,7 +469,7 @@ export async function runAlerts(env, { forceSummary = false } = {}) {
 }
 
 // ---------- test posts: one sample message to each Worker webhook ----------
-// only: send to that one channel (sales, disputes, summary, errors, price-drops).
+// only: send to that one channel (sales, disputes, summary, errors, price-drops, reviews).
 export async function sendTests(env, only) {
   const want = (name) => !only || only === name;
   const sample = {
@@ -465,6 +512,11 @@ export async function sendTests(env, only) {
       timestamp: new Date().toISOString()
     }] });
     sent.push(env.DISCORD_WEBHOOK_PRICE_DROPS ? 'price-drops' : 'price-drops (fallback: DISCORD_WEBHOOK_PRICE_DROPS not set)');
+  }
+  if (want('reviews') && reviewsHook(env)) {
+    const review = { feedbackRating: 'Positive', feedbackTags: ['FastDelivery', 'AsDescribed'], reviewMessage: 'Smooth handover, thanks!', isReviewMessageVisible: true };
+    await post(reviewsHook(env), { content: 'Test message, ignore (a negative review pings @here).', embeds: [reviewEmbed({ ...sample, review }, null)] });
+    sent.push(env.DISCORD_WEBHOOK_REVIEWS ? 'reviews' : 'reviews (to #sales: DISCORD_WEBHOOK_REVIEWS not set)');
   }
   return { ok: true, sent };
 }

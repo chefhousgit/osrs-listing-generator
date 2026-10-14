@@ -1,4 +1,5 @@
 import { runAlerts, sendTests, setAutoDrop } from './alerts.js';
+import { saveBackup, listBackups, getBackup } from './backup.js';
 
 export default {
   async fetch(request, env) {
@@ -37,6 +38,17 @@ export default {
       const stock = { waiting: Number(body.waiting) || 0, listed: Number(body.listed) || 0, sold: Number(body.sold) || 0, at: new Date().toISOString() };
       await env.STATE.put("stock", JSON.stringify(stock));
       return json({ ok: true, stock });
+    }
+
+    // Backups of the account folder records (backup.js): the app saves, scripts/backup.js lists / pulls.
+    if (url.pathname === "/alerts/backup") {
+      const result = await saveBackup(env, await request.json().catch(() => null));
+      return new Response(JSON.stringify(result), { status: result.status || 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (url.pathname === "/alerts/backup/list") return json(await listBackups(env));
+    if (url.pathname === "/alerts/backup/get") {
+      const backup = await getBackup(env, url.searchParams.get("key"));
+      return backup ? json(backup) : new Response("Not found", { status: 404 });
     }
 
     if (url.pathname === "/alerts/run" || url.pathname === "/alerts/test") {
