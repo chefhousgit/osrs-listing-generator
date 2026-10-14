@@ -11,11 +11,19 @@
 // ELDORADO_CREDS_EXPIRE (YYYY-MM-DD, optional). KV binding STATE remembers which orders were already
 // announced and when each offer was first seen (Eldorado offers carry no creation date).
 // Nothing here posts login details, keys or buyer information.
+//
+// Eldorado rate-limits the seller API (429 "Quota exceeded"), so each run stays light: the login
+// token is reused for its 15 minutes (cached in KV), orders are checked every run, and the offer
+// list is refreshed at most hourly (plus right before the summary). A 429 only reaches #errors if
+// it keeps happening for RATE_LIMIT_GRACE_HOURS.
 
 const ELDORADO = 'https://www.eldorado.gg';
 const IMAGE_BASE = 'https://fileserviceusprod.blob.core.windows.net/offerimages/';
 const STALE_DAYS = 14;
 const DAY = 24 * 60 * 60 * 1000;
+const HOUR = 60 * 60 * 1000;
+const OFFERS_EVERY = 55 * 60 * 1000;   // offer list refresh interval
+const RATE_LIMIT_GRACE_HOURS = 3;
 
 const COLORS = { sale: 0x5cb85c, dispute: 0xd9534f, cancel: 0x888888, done: 0xe4b04a, summary: 0xe4b04a, alert: 0xd68f3c };
 
@@ -33,13 +41,22 @@ async function getToken(env) {
   return body.accessToken;
 }
 
+// Login token, reused from KV while it's valid (tokens last 15 minutes).
+async function cachedToken(env) {
+  const saved = await env.STATE.get('token');
+  if (saved) return saved;
+  const token = await getToken(env);
+  await env.STATE.put('token', token, { expirationTtl: 13 * 60 });
+  return token;
+}
+
 async function getJson(token, path) {
   const res = await fetch(ELDORADO + path, { headers: { Authorization: 'Bearer ' + token } });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     let detail = body.slice(0, 300);
     try { const j = JSON.parse(body); if (j.messages) detail = j.messages.join(' '); } catch (e) { /* not JSON */ }
-    throw new Error(`GET ${path.split('?')[0]} failed (${res.status})${detail ? ': ' + detail : ''}`);
+    throw Object.assign(new Error(`GET ${path.split('?')[0]} failed (${res.status})${detail ? ': ' + detail : ''}`), { status: res.status });
   }
   return res.json();
 }
@@ -104,6 +121,29 @@ async function alertOnce(env, key, text) {
   if ((await env.STATE.get(flag)) === today) return;
   await post(errorsHook(env), { embeds: [{ title: '⚠️ Error', description: text, color: COLORS.alert }] });
   await env.STATE.put(flag, today, { expirationTtl: 2 * 24 * 3600 });
+}
+
+// A failed check: rate limits (429) stay quiet unless they last RATE_LIMIT_GRACE_HOURS;
+// anything else goes to #errors once a day.
+async function reportProblem(env, key, err, text) {
+  if (err.status === 429) {
+    const flag = 'ratelimited:' + key;
+    const since = await env.STATE.get(flag);
+    if (!since) {
+      await env.STATE.put(flag, new Date().toISOString(), { expirationTtl: 2 * 24 * 3600 });
+      return;
+    }
+    if (Date.now() - Date.parse(since) < RATE_LIMIT_GRACE_HOURS * HOUR) return;
+    await alertOnce(env, key, `${text} Eldorado has been rate-limiting it since ${since.slice(11, 16)} UTC (${err.message}).`);
+    return;
+  }
+  if (err.status === 401) await env.STATE.delete('token'); // log in again next run
+  await alertOnce(env, key, `${text} ${err.message}`);
+}
+
+async function clearRateLimit(env, key) {
+  const flag = 'ratelimited:' + key;
+  if (await env.STATE.get(flag)) await env.STATE.delete(flag);
 }
 
 // ---------- every 5 minutes ----------
@@ -213,7 +253,7 @@ function credentialDaysLeft(env) {
 export async function runAlerts(env, { forceSummary = false } = {}) {
   let token;
   try {
-    token = await getToken(env);
+    token = await cachedToken(env);
   } catch (err) {
     await alertOnce(env, 'auth', `Eldorado rejected the API credentials (${err.message}). Sales alerts are paused until new credentials are set with \`wrangler secret put\`.`);
     return { ok: false, error: 'auth: ' + err.message };
@@ -222,19 +262,38 @@ export async function runAlerts(env, { forceSummary = false } = {}) {
   const problems = [];
   try {
     await checkOrders(env, token);
+    await clearRateLimit(env, 'orders');
   } catch (err) {
     problems.push('orders: ' + err.message);
-    await alertOnce(env, 'orders', 'Could not check your Eldorado orders: ' + err.message);
+    await reportProblem(env, 'orders', err, 'Could not check your Eldorado orders (sales / disputes).');
   }
+
+  const local = localParts(env, new Date());
+  const summaryHour = Number(env.SUMMARY_HOUR || 21);
+  const lastSummary = await env.STATE.get('summaryDay');
+  const summaryDue = forceSummary || (local.hour >= summaryHour && lastSummary !== local.day);
+
+  // Offer list: from KV unless it's an hour old or the summary is about to use it.
   let offers = [];
   let firstSeen = {};
-  try {
-    offers = await getOffers(token);
-    firstSeen = await trackOffers(env, offers);
-  } catch (err) {
-    problems.push('offers: ' + err.message);
-    await alertOnce(env, 'offers', 'Could not read your Eldorado offers (stock and stale listings in the summary): ' + err.message);
+  const cache = await env.STATE.get('offersCache', 'json');
+  if (cache && !summaryDue && Date.now() - cache.at < OFFERS_EVERY) {
+    offers = cache.offers;
+  } else {
+    try {
+      offers = (await getOffers(token)).map((o) => ({ id: o.id, offerState: o.offerState, offerTitle: o.offerTitle, pricePerUnit: o.pricePerUnit }));
+      firstSeen = await trackOffers(env, offers);
+      await env.STATE.put('offersCache', JSON.stringify({ at: Date.now(), offers }));
+      await clearRateLimit(env, 'offers');
+    } catch (err) {
+      problems.push('offers: ' + err.message);
+      await reportProblem(env, 'offers', err, 'Could not read your Eldorado offers (stock and stale listings in the summary).');
+      if (cache) offers = cache.offers; // last known list is better than none
+      // Back off: try again in 15 minutes rather than on every 5-minute run.
+      await env.STATE.put('offersCache', JSON.stringify({ at: Date.now() - OFFERS_EVERY + 15 * 60 * 1000, offers: cache ? cache.offers : [] }));
+    }
   }
+  if (!Object.keys(firstSeen).length) firstSeen = (await env.STATE.get('offers', 'json')) || {};
 
   const days = credentialDaysLeft(env);
   if (days !== null && days <= 7) {
@@ -243,12 +302,13 @@ export async function runAlerts(env, { forceSummary = false } = {}) {
       : `Your Eldorado API credentials expire in ${days} day${days === 1 ? '' : 's'}. Generate new ones on the Seller API page and update ELDORADO_CREDS_EXPIRE.`);
   }
 
-  const local = localParts(env, new Date());
-  const summaryHour = Number(env.SUMMARY_HOUR || 21);
-  const lastSummary = await env.STATE.get('summaryDay');
-  if (forceSummary || (local.hour >= summaryHour && lastSummary !== local.day)) {
-    await sendSummary(env, token, offers, firstSeen);
-    if (!forceSummary) await env.STATE.put('summaryDay', local.day);
+  if (summaryDue) {
+    try {
+      await sendSummary(env, token, offers, firstSeen);
+      if (!forceSummary) await env.STATE.put('summaryDay', local.day);
+    } catch (err) {
+      problems.push('summary: ' + err.message); // retried on the next run
+    }
   }
   return { ok: problems.length === 0, offers: offers.length, problems };
 }
