@@ -42,7 +42,7 @@ export default {
     if (url.pathname === "/alerts/run" || url.pathname === "/alerts/test") {
       try {
         const result = url.pathname === "/alerts/test"
-          ? await sendTests(env)
+          ? await sendTests(env, url.searchParams.get("only"))
           : await runAlerts(env, { forceSummary: url.searchParams.get("summary") === "1" });
         return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
       } catch (err) {

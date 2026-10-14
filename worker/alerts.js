@@ -422,7 +422,9 @@ export async function runAlerts(env, { forceSummary = false } = {}) {
 }
 
 // ---------- test posts: one sample message to each Worker webhook ----------
-export async function sendTests(env) {
+// only: send to that one channel (sales, disputes, summary, errors, price-drops).
+export async function sendTests(env, only) {
+  const want = (name) => !only || only === name;
   const sample = {
     id: 'test-order-0000',
     state: { state: 'Paid' },
@@ -432,24 +434,37 @@ export async function sendTests(env) {
     latestDispute: { reason: 'Items_Missing_From_Account' }
   };
   const sent = [];
-  if (env.DISCORD_WEBHOOK_SALES) {
+  if (want('sales') && env.DISCORD_WEBHOOK_SALES) {
     await post(env.DISCORD_WEBHOOK_SALES, { content: 'Test message, ignore.', embeds: [orderEmbed(sample, '💰 Sold', COLORS.sale, 'Hand over the account, then mark the order delivered.')] });
     sent.push('sales');
   }
-  if (disputesHook(env)) {
+  if (want('disputes') && disputesHook(env)) {
     await post(disputesHook(env), { content: 'Test message, ignore (a real dispute pings @here).', embeds: [orderEmbed({ ...sample, state: { state: 'Disputed' } }, '🚨 Dispute opened (Items Missing From Account)', COLORS.dispute, 'Reply on Eldorado.')] });
     sent.push(env.DISCORD_WEBHOOK_DISPUTES ? 'disputes' : 'disputes (to #sales: DISCORD_WEBHOOK_DISPUTES not set)');
   }
-  if (env.DISCORD_WEBHOOK_SUMMARY) {
+  if (want('summary') && env.DISCORD_WEBHOOK_SUMMARY) {
     await post(env.DISCORD_WEBHOOK_SUMMARY, { content: 'Test message, ignore.', embeds: [{ title: '📊 Daily summary (test)', color: COLORS.summary, fields: [
       { name: 'Listed (24h)', value: '3', inline: true }, { name: 'Sold (24h)', value: '2', inline: true }, { name: 'Revenue (24h)', value: '$95.00', inline: true },
       { name: 'In stock', value: '12 active · 1 paused' }, { name: 'Listed 14+ days, no sale (1)', value: '• Example account ($60.00, 16d)' }
     ], timestamp: new Date().toISOString() }] });
     sent.push('summary');
   }
-  if (errorsHook(env)) {
+  if (want('errors') && errorsHook(env)) {
     await post(errorsHook(env), { content: 'Test message, ignore.', embeds: [{ title: '⚠️ Error (test)', description: 'This is where credential and Eldorado problems from the 24/7 checks show up.', color: COLORS.alert }] });
     sent.push('errors');
+  }
+  if (want('price-drops') && priceDropsHook(env)) {
+    await post(priceDropsHook(env), { content: 'Test message, ignore.', embeds: [{
+      title: '📉 Price drop: TEST 1007 Total Level HCIM',
+      color: COLORS.done,
+      fields: [
+        { name: 'Price', value: '$80.00 → **$76.00**', inline: true },
+        { name: 'Listed', value: '14 days', inline: true },
+        { name: 'Floor', value: '$60.00', inline: true }
+      ],
+      timestamp: new Date().toISOString()
+    }] });
+    sent.push(env.DISCORD_WEBHOOK_PRICE_DROPS ? 'price-drops' : 'price-drops (fallback: DISCORD_WEBHOOK_PRICE_DROPS not set)');
   }
   return { ok: true, sent };
 }
