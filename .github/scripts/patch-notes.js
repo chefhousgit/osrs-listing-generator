@@ -9,6 +9,10 @@
 // The section ends at the first blank line or trailer (e.g. Co-Authored-By). Commits without it
 // (internal fixes, docs) are skipped; if no commit in the push has notes, nothing is posted.
 // The webhook URL comes from the DISCORD_WEBHOOK_PATCH_NOTES repository secret.
+//
+// Run by hand (workflow_dispatch) it posts .github/patch-notes-history.md instead: one message per
+// "## Heading" section, oldest first. That was the one-time catch-up of everything before this
+// existed; it can be re-run if the channel ever needs re-filling.
 
 const fs = require('fs');
 
@@ -16,6 +20,33 @@ const webhook = process.env.DISCORD_WEBHOOK_PATCH_NOTES;
 if (!webhook) {
   console.log('DISCORD_WEBHOOK_PATCH_NOTES is not set; skipping.');
   process.exit(0);
+}
+
+async function post(embed) {
+  const res = await fetch(webhook, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ embeds: [embed] })
+  });
+  if (!res.ok) {
+    console.error('Discord webhook failed:', res.status, await res.text());
+    process.exit(1);
+  }
+}
+
+if (process.env.GITHUB_EVENT_NAME === 'workflow_dispatch') {
+  const text = fs.readFileSync('.github/patch-notes-history.md', 'utf8').replace(/\r\n/g, '\n');
+  const sections = text.split(/^## /m).map((s) => s.trim()).filter(Boolean);
+  (async () => {
+    for (const section of sections) {
+      const [heading, ...lines] = section.split('\n');
+      const bullets = lines.map((l) => l.trim()).filter((l) => /^[-*•]/.test(l)).map((l) => '• ' + l.replace(/^[-*•]\s*/, ''));
+      await post({ title: '📝 ' + heading.trim(), description: bullets.join('\n').slice(0, 4000), color: 0xe4b04a });
+      await new Promise((r) => setTimeout(r, 1200)); // stay under Discord's webhook rate limit
+    }
+    console.log(`Posted ${sections.length} history section(s).`);
+  })();
+  return;
 }
 
 const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));

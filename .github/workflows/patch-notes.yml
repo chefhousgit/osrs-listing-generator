@@ -4,6 +4,8 @@ name: Patch notes
 on:
   push:
     branches: [main]
+  # Run by hand (Actions tab, or: gh workflow run patch-notes.yml) to post patch-notes-history.md.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: .github/scripts
+          sparse-checkout: .github
       - uses: actions/setup-node@v4
         with:
           node-version: 20
