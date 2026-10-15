@@ -16,6 +16,7 @@ let lastSync = null; // { at, moves: [...], error }
 let reportStock = null; // set by server.js: (counts) => Promise, sends folder counts to the Worker
 let sendBackup = null; // set by server.js: (backup) => Promise, stores the folder records on the Worker
 let lastBackup = null; // what was last backed up, so an unchanged state isn't sent again
+let backupStatus = null; // { at, error } of the last backup attempt, for the setup check
 let running = null;
 
 function enabled() {
@@ -92,8 +93,10 @@ async function afterSync() {
   if (sendBackup) {
     try {
       await backup(listed, sold);
+      backupStatus = { at: new Date().toISOString(), error: null };
     } catch (err) {
       console.error('Backup failed:', err.message);
+      backupStatus = { at: new Date().toISOString(), error: err.message };
     }
   }
 }
@@ -165,6 +168,7 @@ function start() {
 module.exports = {
   sync, ordersWithFolders, handover, link, start, enabled, backupRecords, backup,
   getLastSync: () => lastSync,
+  getBackupStatus: () => backupStatus,
   onStock: (fn) => { reportStock = fn; },
   onBackup: (fn) => { sendBackup = fn; }
 };

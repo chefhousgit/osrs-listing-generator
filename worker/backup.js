@@ -35,6 +35,13 @@ export async function listBackups(env) {
   return { ok: true, keys: keys.sort().reverse() };
 }
 
+// Each PC's latest backup, without its records: { pc, at, listed, sold } (for the app's setup check).
+export async function latestBackups(env) {
+  const { keys } = await listBackups(env);
+  const latest = await Promise.all(keys.filter((k) => k.endsWith(':latest')).map((k) => env.STATE.get(k, 'json')));
+  return latest.filter(Boolean).map((b) => ({ pc: b.pc, at: b.at, listed: b.listed.length, sold: b.sold.length }));
+}
+
 export async function getBackup(env, key) {
   if (!key || !key.startsWith(PREFIX)) return null;
   return env.STATE.get(key, 'json');

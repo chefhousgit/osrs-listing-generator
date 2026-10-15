@@ -2165,6 +2165,49 @@ html, body {
 .settings-where.missing { color: #f5b4b2; }
 .settings-where.pending { color: var(--text-dim); }
 
+.health-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.health-row:last-child {
+  border-bottom: 0;
+}
+
+.health-icon {
+  flex: 0 0 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.health-row.ok .health-icon { color: #b9e6b9; border-color: #3f6b3f; }
+.health-row.warn .health-icon { color: var(--gold); border-color: var(--gold-dim); }
+.health-row.bad .health-icon { color: #f5b4b2; border-color: #6b3330; }
+
+.health-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.health-text {
+  font-size: 0.9rem;
+}
+
+.health-body {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .settings-page .secondary-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;

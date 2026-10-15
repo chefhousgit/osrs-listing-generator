@@ -73,6 +73,60 @@ test('settings: a Listed folder that does not exist yet is fine if its parent do
   await assert.rejects(settings.save({ SOLD_DIR: path.join(tmp, 'no', 'such', 'Sold') }), { status: 400 });
 });
 
+// ---------- setup check ----------
+const NOW = Date.parse('2026-10-15T12:00:00Z');
+const minsAgo = (m) => new Date(NOW - m * 60000).toISOString();
+const workerHealth = (extra = {}) => ({
+  ok: true, runEveryMinutes: 5, eldorado: true, credsExpire: '2027-10-12', credsDaysLeft: 362,
+  lastRun: { at: minsAgo(12), ok: true, problems: [] },
+  channels: [
+    { name: 'sales', set: true, secret: 'DISCORD_WEBHOOK_SALES', fallback: null },
+    { name: 'expiring', set: false, secret: 'DISCORD_WEBHOOK_EXPIRING', fallback: 'errors' }
+  ],
+  backups: [{ pc: os.hostname().replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40), at: minsAgo(90), listed: 4, sold: 9 }, { pc: 'OTHER-PC', at: minsAgo(300), listed: 2, sold: 1 }],
+  ...extra
+});
+const deps = (extra = {}) => ({
+  worker: async () => workerHealth(), proxySet: true, eldoradoSet: true, syncEnabled: true,
+  lastSync: { at: minsAgo(30), moves: [{}], error: null }, backupStatus: { at: minsAgo(30), error: null }, ...extra
+});
+const rowsOf = async (d) => Object.fromEntries((await settings.health(d, NOW)).rows.map((r) => [r.id, r]));
+
+test('setup check: a healthy setup', async () => {
+  const r = await rowsOf(deps());
+  assert.equal(r.worker.status, 'ok');
+  assert.equal(r.checks.text, 'Running every 5 minutes (last recorded 12 min ago).');
+  assert.equal(r.eldorado.status, 'ok');
+  assert.match(r.eldorado.text, /Expire in 362 days \(2027-10-12\)/);
+  assert.equal(r['discord-worker'].status, 'warn');
+  assert.match(r['discord-worker'].detail, /#expiring goes to #errors \(DISCORD_WEBHOOK_EXPIRING not set\)/);
+  assert.equal(r.sync.text, 'Last run 30 min ago: 1 moved.');
+  assert.equal(r.backup.status, 'ok');
+  assert.match(r.backup.text, /last stored 2 hours ago \(4 listed, 9 sold\)/);
+  assert.match(r.backup.detail, /OTHER-PC: 5 hours ago/);
+});
+
+test('setup check: worker unreachable, wrong secret, or not redeployed', async () => {
+  assert.equal((await rowsOf(deps({ worker: async () => { throw new Error('fetch failed'); } }))).worker.status, 'bad');
+  assert.match((await rowsOf(deps({ worker: async () => { throw new Error('Worker /alerts/health failed (401)'); } }))).worker.text, /PROXY_SECRET/);
+  const old = await rowsOf(deps({ worker: async () => { throw new Error('Worker /alerts/health failed (404)'); } }));
+  assert.equal(old.worker.status, 'warn');
+  assert.match(old.worker.text, /redeploying/);
+  assert.equal((await rowsOf(deps({ proxySet: false }))).worker.status, 'bad');
+});
+
+test('setup check: stopped checks, expiring credentials, sync off, failed backup', async () => {
+  const r = await rowsOf(deps({
+    worker: async () => workerHealth({ lastRun: { at: minsAgo(120), ok: true }, credsDaysLeft: 5 }),
+    syncEnabled: false, lastSync: null, backupStatus: { at: minsAgo(5), error: 'Worker /alerts/backup failed (500)' }
+  }));
+  assert.equal(r.checks.status, 'bad');
+  assert.equal(r.eldorado.status, 'bad');
+  assert.equal(r.sync.status, 'off');
+  assert.equal(r.backup.status, 'bad');
+  assert.match(r.backup.detail, /failed \(500\)/);
+});
+
 // ---------- backup ----------
 test('backup: sends only listing.json / sale.json, only when something changed', async () => {
   const accounts = process.env.ACCOUNTS_DIR;

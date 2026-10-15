@@ -1,5 +1,5 @@
-import { runAlerts, sendTests, setAutoDrop } from './alerts.js';
-import { saveBackup, listBackups, getBackup } from './backup.js';
+import { runAlerts, sendTests, setAutoDrop, health } from './alerts.js';
+import { saveBackup, listBackups, getBackup, latestBackups } from './backup.js';
 
 export default {
   async fetch(request, env) {
@@ -39,6 +39,9 @@ export default {
       await env.STATE.put("stock", JSON.stringify(stock));
       return json({ ok: true, stock });
     }
+
+    // The app's setup check (Settings page): last run, credentials, which channels are set, backups.
+    if (url.pathname === "/alerts/health") return json(await health(env, await latestBackups(env)));
 
     // Backups of the account folder records (backup.js): the app saves, scripts/backup.js lists / pulls.
     if (url.pathname === "/alerts/backup") {

@@ -171,6 +171,77 @@ test('sales: an order with no created date is treated as new (never silently dro
   assert.equal(salePosts().length, 1);
 });
 
+// ---------- expiring ----------
+const offerExpiring = (id, days, extra = {}) => ({
+  id, offerTitle: 'Offer ' + id, offerState: 'Active', pricePerUnit: { amount: 40, currency: 'USD' },
+  expireDate: new Date(Date.now() + days * 86400000).toISOString(), ...extra
+});
+
+test('expiring: active offers within 2 days post to #expiring once each', async () => {
+  const { warnExpiring } = await load('alerts.js');
+  const e = env({ DISCORD_WEBHOOK_EXPIRING: 'https://discord.test/expiring', DISCORD_WEBHOOK_ERRORS: 'https://discord.test/errors' });
+  const offers = [offerExpiring('soon', 1.5), offerExpiring('later', 5), offerExpiring('paused', 1, { offerState: 'Paused' }), offerExpiring('gone', -3)];
+  await warnExpiring(e, offers);
+  await warnExpiring(e, offers);
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].url, 'https://discord.test/expiring');
+  const embed = posts[0].body.embeds[0];
+  assert.match(embed.title, /Expiring soon: Offer soon/);
+  assert.match(embed.fields[0].value, /^in 2 days \(\d{4}-\d{2}-\d{2}\)$/);
+  assert.equal(embed.fields[1].value, '$40.00');
+});
+
+test('expiring: a renewed offer (new expiry date) is announced again', async () => {
+  const { warnExpiring } = await load('alerts.js');
+  const e = env({ DISCORD_WEBHOOK_EXPIRING: 'https://discord.test/expiring' });
+  await warnExpiring(e, [offerExpiring('a', 1)]);
+  await warnExpiring(e, [offerExpiring('a', 1.9)]);
+  assert.equal(posts.length, 2);
+});
+
+test('expiring: without DISCORD_WEBHOOK_EXPIRING they go to #errors', async () => {
+  const { warnExpiring } = await load('alerts.js');
+  const e = env({ DISCORD_WEBHOOK_ERRORS: 'https://discord.test/errors' });
+  await warnExpiring(e, [offerExpiring('a', 1)]);
+  assert.equal(posts[0].url, 'https://discord.test/errors');
+});
+
+test('expiring test route: posts your real expiring offers without marking them announced', async () => {
+  const { sendTests, warnExpiring } = await load('alerts.js');
+  const e = env({ DISCORD_WEBHOOK_EXPIRING: 'https://discord.test/expiring' });
+  await e.STATE.put('offersCache', JSON.stringify({ at: Date.now(), offers: [offerExpiring('a', 0.5), offerExpiring('b', 1.8), offerExpiring('c', 9)] }));
+  const out = await sendTests(e, 'expiring');
+  assert.deepEqual(out.sent, ['expiring (2 real)']);
+  assert.equal(posts.length, 1);
+  assert.deepEqual(posts[0].body.embeds.map((x) => x.title), ['⏳ Expiring soon: Offer a', '⏳ Expiring soon: Offer b']);
+  assert.match(posts[0].body.content, /^Test: your 2 offers/);
+  await warnExpiring(e, [offerExpiring('a', 0.5)]);
+  assert.equal(posts.length, 2, 'the real alert still goes out later');
+});
+
+test('expiring test route: a sample when nothing is expiring', async () => {
+  const { sendTests } = await load('alerts.js');
+  const e = env({ DISCORD_WEBHOOK_EXPIRING: 'https://discord.test/expiring' });
+  const out = await sendTests(e, 'expiring');
+  assert.deepEqual(out.sent, ['expiring (0 real)']);
+  assert.match(posts[0].body.embeds[0].title, /TEST 1007/);
+});
+
+// ---------- health ----------
+test('health: which channels are set and their fallbacks, never the webhook URLs', async () => {
+  const { health } = await load('alerts.js');
+  const e = env({ DISCORD_WEBHOOK_REVIEWS: undefined, ELDORADO_CREDS_EXPIRE: '2027-10-12', ELDORADO_CLIENT_ID: 'x', ELDORADO_CLIENT_SECRET: 'y' });
+  const h = await health(e, []);
+  const byName = Object.fromEntries(h.channels.map((c) => [c.name, c]));
+  assert.equal(byName.sales.set, true);
+  assert.equal(byName.reviews.set, false);
+  assert.equal(byName.reviews.fallback, 'sales');
+  assert.equal(byName.expiring.secret, 'DISCORD_WEBHOOK_EXPIRING');
+  assert.equal(h.eldorado, true);
+  assert.equal(h.credsExpire, '2027-10-12');
+  assert.doesNotMatch(JSON.stringify(h), /discord\.test/);
+});
+
 // ---------- backup ----------
 test('backup: saves latest and a dated snapshot per PC, lists and reads them back', async () => {
   const { saveBackup, listBackups, getBackup } = await load('backup.js');

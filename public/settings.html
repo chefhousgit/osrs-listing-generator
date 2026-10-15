@@ -22,6 +22,14 @@
   <main class="container offers-page settings-page">
     <section id="settingsStatus" class="status-box hidden"></section>
 
+    <section class="stats-panel">
+      <header class="stats-panel-head">
+        <h3>Setup check <span id="healthPc" class="offers-count"></span></h3>
+        <button type="button" id="healthRefresh" class="secondary-btn small-btn">Check again</button>
+      </header>
+      <div id="healthRows" class="health-rows"><p class="offer-meta">Checking…</p></div>
+    </section>
+
     <form id="settingsForm" class="stats-panel" autocomplete="off">
       <header class="stats-panel-head">
         <h3>Account folders</h3>

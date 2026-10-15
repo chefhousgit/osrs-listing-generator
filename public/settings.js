@@ -1,5 +1,6 @@
-// Settings page: the account folder paths in .env (ACCOUNTS_DIR, LISTED_DIR, SOLD_DIR). Browse opens
-// the Windows folder picker on this PC; Save writes .env and applies the paths right away.
+// Settings page: a setup check for this PC (Worker, Eldorado, Discord, folder sync, backup) and the
+// account folder paths in .env (ACCOUNTS_DIR, LISTED_DIR, SOLD_DIR). Browse opens the Windows folder
+// picker on this PC; Save writes .env and applies the paths right away.
 
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -111,10 +112,39 @@
       data = await call('POST', '/settings', { values });
       render();
       status('ok', 'Saved. The app is using the new folders now.');
+      loadHealth();
     } catch (err) {
       status('error', err.message);
       refreshButtons();
     }
+  }
+
+  // ---------- setup check ----------
+  const ICONS = { ok: '✓', warn: '!', bad: '✕', off: '–' };
+
+  async function loadHealth() {
+    const box = $('healthRows');
+    const btn = $('healthRefresh');
+    btn.disabled = true;
+    try {
+      const h = await call('GET', '/settings/health');
+      $('healthPc').textContent = '· ' + h.pc;
+      box.innerHTML = '';
+      h.rows.forEach((r) => {
+        const line = el('div', 'health-row ' + r.status);
+        const icon = el('span', 'health-icon', ICONS[r.status] || '?');
+        icon.setAttribute('aria-label', r.status);
+        const body = el('div', 'health-body');
+        body.append(el('div', 'health-label', r.label), el('div', 'health-text', r.text));
+        if (r.detail) body.appendChild(el('div', 'offer-meta', r.detail));
+        line.append(icon, body);
+        box.appendChild(line);
+      });
+    } catch (err) {
+      box.innerHTML = '';
+      box.appendChild(el('p', 'settings-where missing', err.message));
+    }
+    btn.disabled = false;
   }
 
   async function load() {
@@ -128,5 +158,7 @@
 
   $('settingsForm').addEventListener('submit', save);
   resetBtn.addEventListener('click', render);
+  $('healthRefresh').addEventListener('click', loadHealth);
   load();
+  loadHealth();
 })();

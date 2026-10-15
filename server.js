@@ -788,6 +788,14 @@ app.post('/settings', settingsRoute(async (req) => {
   orders.start(); // the hourly Sold sync, if it couldn't start before (no accounts folder)
   return result;
 }));
+app.get('/settings/health', settingsRoute(() => settings.health({
+  worker: () => worker('/alerts/health'),
+  proxySet: Boolean(PROXY_URL && PROXY_SECRET),
+  eldoradoSet: eldorado.isConfigured(),
+  syncEnabled: orders.enabled(),
+  lastSync: orders.getLastSync(),
+  backupStatus: orders.getBackupStatus()
+})));
 app.post('/settings/pick', settingsRoute(async (req) => ({ path: await settings.pickFolder(req.body && req.body.key, req.body && req.body.start) })));
 
 // One sample message to each Discord webhook set in .env (open in the browser to test).
@@ -806,7 +814,8 @@ async function worker(path, body) {
   const r = await fetch(PROXY_URL.replace(/\/+$/, '') + path, {
     method: 'POST',
     headers: { 'X-Proxy-Secret': PROXY_SECRET, 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(15000) // a dead Worker fails instead of hanging the page
   });
   if (!r.ok) throw new Error(`Worker ${path} failed (${r.status})`);
   return r.json();

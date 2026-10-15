@@ -130,4 +130,108 @@ function pickFolder(key, start) {
   return picking.finally(() => { picking = null; });
 }
 
-module.exports = { current, save, pickFolder, updateEnvText, KEYS };
+// ---------- setup check ----------
+// One row per part of the setup: status 'ok' | 'warn' | 'bad' | 'off', a one-line text and an
+// optional detail. deps come from server.js: worker() asks the Worker's /alerts/health.
+const MIN = 60 * 1000;
+function ago(iso, now = Date.now()) {
+  const m = Math.round((now - Date.parse(iso)) / MIN);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 48) return `${h} hour${h === 1 ? '' : 's'} ago`;
+  return `${Math.round(h / 24)} days ago`;
+}
+const row = (id, label, status, text, detail) => ({ id, label, status, text, detail: detail || '' });
+const cleanPc = (pc) => String(pc || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
+
+async function health(deps, now = Date.now()) {
+  const rows = [];
+  let w = null;
+
+  // Worker
+  if (!deps.proxySet) {
+    rows.push(row('worker', 'Worker', 'bad', 'Not set up: PROXY_URL / PROXY_SECRET are missing from .env.'));
+  } else {
+    try {
+      w = await deps.worker();
+      rows.push(row('worker', 'Worker', 'ok', 'Reachable.'));
+    } catch (err) {
+      const msg = err.message || '';
+      if (/\(404\)/.test(msg)) rows.push(row('worker', 'Worker', 'warn', 'Reachable, but it needs redeploying for this check (npx.cmd wrangler deploy in the worker folder).'));
+      else if (/\(401\)/.test(msg)) rows.push(row('worker', 'Worker', 'bad', "PROXY_SECRET in .env doesn't match the Worker's."));
+      else rows.push(row('worker', 'Worker', 'bad', "Can't reach the Worker.", msg));
+    }
+  }
+  if (w) {
+    const run = w.lastRun;
+    const age = run ? now - Date.parse(run.at) : Infinity;
+    if (!run) rows.push(row('checks', '24/7 checks', 'warn', 'No run recorded yet. The checks record themselves every 30 minutes.'));
+    else if (age > 45 * MIN) rows.push(row('checks', '24/7 checks', 'bad', `Last recorded ${ago(run.at, now)}: the 5-minute checks may have stopped.`, 'Check the Worker in the Cloudflare dashboard (Triggers).'));
+    else if (!run.ok) rows.push(row('checks', '24/7 checks', 'warn', `Running, but the last check had problems (${ago(run.at, now)}).`, (run.problems || []).join(' · ')));
+    else rows.push(row('checks', '24/7 checks', 'ok', `Running every ${w.runEveryMinutes || 5} minutes (last recorded ${ago(run.at, now)}).`));
+  }
+
+  // Eldorado credentials
+  const parts = [deps.eldoradoSet ? 'This PC: set.' : 'This PC: not set (ELDORADO_CLIENT_ID / SECRET in .env).'];
+  let status = deps.eldoradoSet ? 'ok' : 'bad';
+  if (w) {
+    if (!w.eldorado) { parts.push('Worker: not set.'); status = 'bad'; }
+    const d = w.credsDaysLeft;
+    if (d === null || d === undefined) {
+      parts.push('Expiry date unknown (ELDORADO_CREDS_EXPIRE in wrangler.toml).');
+      if (status === 'ok') status = 'warn';
+    } else if (d < 0) {
+      parts.push(`Expired on ${w.credsExpire}.`);
+      status = 'bad';
+    } else {
+      parts.push(`Expire in ${d} day${d === 1 ? '' : 's'} (${w.credsExpire}).`);
+      if (d <= 7) status = 'bad';
+      else if (d <= 30 && status === 'ok') status = 'warn';
+    }
+  }
+  rows.push(row('eldorado', 'Eldorado API', status, parts.join(' ')));
+
+  // Discord: the app's own webhooks, then the Worker's channels
+  const appHooks = [['#listed', process.env.DISCORD_WEBHOOK_LISTED], ['#errors', process.env.DISCORD_WEBHOOK_ERRORS || process.env.DISCORD_WEBHOOK_ALERTS]];
+  const missingApp = appHooks.filter(([, v]) => !v).map(([n]) => n);
+  rows.push(row('discord-app', 'Discord (this PC)', missingApp.length ? 'warn' : 'ok',
+    missingApp.length ? `Not set: ${missingApp.join(', ')}.` : '#listed and #errors are set.',
+    missingApp.length ? 'Add DISCORD_WEBHOOK_LISTED / DISCORD_WEBHOOK_ERRORS to .env and restart the app.' : ''));
+  if (w && Array.isArray(w.channels)) {
+    const set = w.channels.filter((c) => c.set).map((c) => '#' + c.name);
+    const fallback = w.channels.filter((c) => !c.set && c.fallback);
+    const off = w.channels.filter((c) => !c.set && !c.fallback);
+    const notes = [
+      ...fallback.map((c) => `#${c.name} goes to #${c.fallback} (${c.secret} not set)`),
+      ...off.map((c) => `#${c.name} is off (${c.secret} not set)`)
+    ];
+    rows.push(row('discord-worker', 'Discord (Worker)', off.length ? 'bad' : fallback.length ? 'warn' : 'ok',
+      set.length ? `Set: ${set.join(', ')}.` : 'No channels set.', notes.join(' · ')));
+  }
+
+  // Folder sync
+  const sync = deps.lastSync;
+  if (!deps.syncEnabled) rows.push(row('sync', 'Folder sync', 'off', 'Not running: needs the accounts folder (below) and the Eldorado API on this PC.'));
+  else if (!sync) rows.push(row('sync', 'Folder sync', 'ok', 'Runs a minute after the app starts, then every hour. Not run yet.'));
+  else if (sync.error) rows.push(row('sync', 'Folder sync', 'bad', `Last run ${ago(sync.at, now)} failed.`, sync.error));
+  else rows.push(row('sync', 'Folder sync', 'ok', `Last run ${ago(sync.at, now)}: ${sync.moves.length ? sync.moves.length + ' moved' : 'nothing to move'}.`));
+
+  // Backup
+  const me = cleanPc(require('os').hostname());
+  const local = deps.backupStatus;
+  if (w && Array.isArray(w.backups)) {
+    const mine = w.backups.find((b) => b.pc === me);
+    const others = w.backups.filter((b) => b.pc !== me).map((b) => `${b.pc}: ${ago(b.at, now)} (${b.listed} listed, ${b.sold} sold)`);
+    const detail = [local && local.error ? `Last attempt failed: ${local.error}` : '', others.length ? 'Other PCs: ' + others.join(' · ') : ''].filter(Boolean).join(' · ');
+    if (local && local.error) rows.push(row('backup', 'Backup', 'bad', mine ? `Last stored ${ago(mine.at, now)}, but the latest attempt failed.` : 'Not stored: the latest attempt failed.', detail));
+    else if (mine) rows.push(row('backup', 'Backup', 'ok', `This PC's last stored ${ago(mine.at, now)} (${mine.listed} listed, ${mine.sold} sold). Sent when they change.`, detail));
+    else rows.push(row('backup', 'Backup', deps.syncEnabled ? 'warn' : 'off', deps.syncEnabled ? 'Nothing stored for this PC yet: sent with the next folder sync.' : 'Starts once the folder sync runs.', detail));
+  } else if (local && local.error) {
+    rows.push(row('backup', 'Backup', 'bad', 'The latest backup failed.', local.error));
+  }
+
+  return { pc: me, rows };
+}
+
+module.exports = { current, save, pickFolder, updateEnvText, health, KEYS };

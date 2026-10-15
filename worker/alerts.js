@@ -7,7 +7,8 @@
 //   #price-drops auto price drops (DISCORD_WEBHOOK_PRICE_DROPS; falls back to #listed, then #summary)
 //   #reviews  new buyer reviews and changed ratings, @here on a negative one
 //             (DISCORD_WEBHOOK_REVIEWS; falls back to #sales)
-//   #errors   also: an offer expiring within EXPIRY_WARN_DAYS (once per offer)
+//   #expiring an Active offer expiring within EXPIRY_WARN_DAYS (once per offer and expiry date)
+//             (DISCORD_WEBHOOK_EXPIRING; falls back to #errors)
 //
 // Auto price drops (opt-in per offer from the app's Offers page, stored in KV "autodrop"): from
 // DROP_START_DAYS listed, -DROP_PCT every DROP_EVERY_DAYS, never below DROP_FLOOR of the price it
@@ -99,6 +100,18 @@ const disputesHook = (env) => env.DISCORD_WEBHOOK_DISPUTES || env.DISCORD_WEBHOO
 const errorsHook = (env) => env.DISCORD_WEBHOOK_ERRORS || env.DISCORD_WEBHOOK_ALERTS;
 const priceDropsHook = (env) => env.DISCORD_WEBHOOK_PRICE_DROPS || env.DISCORD_WEBHOOK_LISTED || env.DISCORD_WEBHOOK_SUMMARY;
 const reviewsHook = (env) => env.DISCORD_WEBHOOK_REVIEWS || env.DISCORD_WEBHOOK_SALES;
+const expiringHook = (env) => env.DISCORD_WEBHOOK_EXPIRING || errorsHook(env);
+
+// Each Worker channel: its own secret, and where it goes when that isn't set (for the app's setup check).
+const CHANNELS = [
+  { name: 'sales', key: 'DISCORD_WEBHOOK_SALES' },
+  { name: 'disputes', key: 'DISCORD_WEBHOOK_DISPUTES', fallback: 'sales' },
+  { name: 'summary', key: 'DISCORD_WEBHOOK_SUMMARY' },
+  { name: 'errors', key: 'DISCORD_WEBHOOK_ERRORS', alt: 'DISCORD_WEBHOOK_ALERTS' },
+  { name: 'price-drops', key: 'DISCORD_WEBHOOK_PRICE_DROPS', fallback: 'listed / summary' },
+  { name: 'reviews', key: 'DISCORD_WEBHOOK_REVIEWS', fallback: 'sales' },
+  { name: 'expiring', key: 'DISCORD_WEBHOOK_EXPIRING', fallback: 'errors' }
+];
 
 async function post(url, payload) {
   if (!url) return;
@@ -327,12 +340,33 @@ export async function setAutoDrop(env, { offerId, enabled, base }) {
 }
 
 // ---------- expiry ----------
-async function warnExpiring(env, offers) {
+const expiresIn = (left) => (left <= 0 ? 'today' : `in ${Math.ceil(left)} day${Math.ceil(left) === 1 ? '' : 's'}`);
+
+export function expiringEmbed(o, left) {
+  return {
+    title: `⏳ Expiring soon: ${o.offerTitle || 'Account'}`.slice(0, 250),
+    color: COLORS.alert,
+    fields: [
+      { name: 'Expires', value: `${expiresIn(left)} (${o.expireDate.slice(0, 10)})`, inline: true },
+      { name: 'Price', value: money(o.pricePerUnit), inline: true },
+      { name: 'Offer', value: '`' + o.id + '`', inline: false }
+    ],
+    footer: { text: 'Renew it on Eldorado so it stays listed.' },
+    timestamp: new Date().toISOString()
+  };
+}
+
+// Active offers expiring within EXPIRY_WARN_DAYS, posted once per offer and expiry date (a renewed
+// offer gets a new date, so it's announced again before that one).
+export async function warnExpiring(env, offers) {
   for (const o of offers) {
     if (o.offerState !== 'Active' || !o.expireDate) continue;
     const left = (Date.parse(o.expireDate) - Date.now()) / DAY;
     if (left > EXPIRY_WARN_DAYS || left < -1) continue;
-    await alertOnce(env, 'expiry:' + o.id, `⏳ "${o.offerTitle}" expires ${left <= 0 ? 'today' : 'in ' + Math.ceil(left) + (Math.ceil(left) === 1 ? ' day' : ' days')} (${o.expireDate.slice(0, 10)}). Renew it on Eldorado so it stays listed.`);
+    const flag = `expiring:${o.id}:${o.expireDate.slice(0, 10)}`;
+    if (await env.STATE.get(flag)) continue;
+    await post(expiringHook(env), { embeds: [expiringEmbed(o, left)] });
+    await env.STATE.put(flag, '1', { expirationTtl: (EXPIRY_WARN_DAYS + 3) * 24 * 3600 });
   }
 }
 
@@ -471,11 +505,37 @@ export async function runAlerts(env, { forceSummary = false } = {}) {
       problems.push('summary: ' + err.message); // retried on the next run
     }
   }
+  await recordRun(env, problems);
   return { ok: problems.length === 0, offers: offers.length, problems };
 }
 
+// When the checks last ran, for the app's setup check. Written at most every RUN_RECORD_MINUTES
+// (or when the outcome changes) to keep KV writes low.
+const RUN_RECORD_MINUTES = 30;
+async function recordRun(env, problems) {
+  const last = await env.STATE.get('lastRun', 'json');
+  const ok = problems.length === 0;
+  if (last && last.ok === ok && Date.now() - Date.parse(last.at) < RUN_RECORD_MINUTES * 60 * 1000) return;
+  await env.STATE.put('lastRun', JSON.stringify({ at: new Date().toISOString(), ok, problems: problems.slice(0, 5) }));
+}
+
+// The Worker's side of the app's setup check: when the checks last ran, credentials, which
+// channels have a webhook (never the URLs), and each PC's latest backup.
+export async function health(env, backups) {
+  return {
+    ok: true,
+    lastRun: await env.STATE.get('lastRun', 'json'),
+    runEveryMinutes: 5,
+    eldorado: Boolean(env.ELDORADO_CLIENT_ID && env.ELDORADO_CLIENT_SECRET),
+    credsExpire: env.ELDORADO_CREDS_EXPIRE || null,
+    credsDaysLeft: credentialDaysLeft(env),
+    channels: CHANNELS.map((c) => ({ name: c.name, set: Boolean(env[c.key] || (c.alt && env[c.alt])), secret: c.key, fallback: c.fallback || null })),
+    backups
+  };
+}
+
 // ---------- test posts: one sample message to each Worker webhook ----------
-// only: send to that one channel (sales, disputes, summary, errors, price-drops, reviews).
+// only: send to that one channel (sales, disputes, summary, errors, price-drops, reviews, expiring).
 export async function sendTests(env, only) {
   const want = (name) => !only || only === name;
   const sample = {
@@ -523,6 +583,27 @@ export async function sendTests(env, only) {
     const review = { feedbackRating: 'Positive', feedbackTags: ['FastDelivery', 'AsDescribed'], reviewMessage: 'Smooth handover, thanks!', isReviewMessageVisible: true };
     await post(reviewsHook(env), { content: 'Test message, ignore (a negative review pings @here).', embeds: [reviewEmbed({ ...sample, review }, null)] });
     sent.push(env.DISCORD_WEBHOOK_REVIEWS ? 'reviews' : 'reviews (to #sales: DISCORD_WEBHOOK_REVIEWS not set)');
+  }
+  if (want('expiring') && expiringHook(env)) {
+    // Your offers expiring within EXPIRY_WARN_DAYS right now (from the hourly offer list, no Eldorado
+    // call, not marked as announced), or a sample when none are.
+    const cache = await env.STATE.get('offersCache', 'json');
+    const now = Date.now();
+    const real = ((cache && cache.offers) || [])
+      .filter((o) => o.offerState === 'Active' && o.expireDate)
+      .map((o) => ({ o, left: (Date.parse(o.expireDate) - now) / DAY }))
+      .filter(({ left }) => left <= EXPIRY_WARN_DAYS && left >= -1)
+      .sort((a, b) => a.left - b.left);
+    const embeds = real.length
+      ? real.map(({ o, left }) => expiringEmbed(o, left))
+      : [expiringEmbed({ id: 'test-offer-0000', offerTitle: 'TEST 1007 Total Level HCIM', pricePerUnit: { amount: 49.99, currency: 'USD' }, expireDate: new Date(now + DAY).toISOString() }, 1)];
+    for (let i = 0; i < embeds.length; i += 10) { // Discord takes up to 10 embeds per message
+      await post(expiringHook(env), {
+        content: i ? undefined : (real.length ? `Test: your ${real.length} offer${real.length === 1 ? '' : 's'} expiring within ${EXPIRY_WARN_DAYS} days.` : 'Test message, ignore (no offers are expiring right now).'),
+        embeds: embeds.slice(i, i + 10)
+      });
+    }
+    sent.push((env.DISCORD_WEBHOOK_EXPIRING ? 'expiring' : 'expiring (to #errors: DISCORD_WEBHOOK_EXPIRING not set)') + ` (${real.length} real)`);
   }
   return { ok: true, sent };
 }
