@@ -21,11 +21,16 @@ function fakeKV() {
 
 let posts;
 let eldoradoOrders = []; // what the fake Eldorado order list returns
+let tokenReply = null; // { status, body } for the login request, when a test sets one
 const realFetch = globalThis.fetch;
 test.beforeEach(() => {
   posts = [];
   eldoradoOrders = [];
+  tokenReply = null;
   globalThis.fetch = async (url, init) => {
+    if (String(url) === 'https://www.eldorado.gg/api/authentication/seller/token' && tokenReply) {
+      return new Response(JSON.stringify(tokenReply.body), { status: tokenReply.status });
+    }
     if (String(url).startsWith('https://www.eldorado.gg/api/v1/orders/me/seller/orders')) {
       const size = Number(new URL(url).searchParams.get('pageSize'));
       return new Response(JSON.stringify({ results: eldoradoOrders.slice(0, size) }), { status: 200 });
@@ -169,6 +174,52 @@ test('sales: an order with no created date is treated as new (never silently dro
   eldoradoOrders = [{ ...order('no-date', null), state: { state: 'Paid' }, createdDate: undefined }];
   await checkOrders(e, 'token');
   assert.equal(salePosts().length, 1);
+});
+
+// ---------- login ----------
+const errorPosts = () => posts.filter((p) => p.url === 'https://discord.test/errors');
+const loginEnv = () => env({ DISCORD_WEBHOOK_ERRORS: 'https://discord.test/errors' });
+
+test('login: a rate limit is not reported as rejected credentials, and stays quiet at first', async () => {
+  const { runAlerts } = await load('alerts.js');
+  const e = loginEnv();
+  tokenReply = { status: 429, body: { messages: ['Whoa! Calm down, cowboy! Quota exceeded. Please try again later.'] } };
+  const out = await runAlerts(e);
+  assert.equal(out.ok, false);
+  assert.equal(errorPosts().length, 0, 'no post for a short rate limit');
+  assert.ok(await e.STATE.get('ratelimited:auth'), 'the start of the rate limit is remembered');
+  assert.deepEqual((await e.STATE.get('lastRun', 'json')).problems, ['login: Whoa! Calm down, cowboy! Quota exceeded. Please try again later.']);
+});
+
+test('login: a rate limit lasting 3+ hours is reported as a rate limit', async () => {
+  const { runAlerts } = await load('alerts.js');
+  const e = loginEnv();
+  await e.STATE.put('ratelimited:auth', new Date(Date.now() - 4 * 3600 * 1000).toISOString());
+  tokenReply = { status: 429, body: { messages: ['Quota exceeded.'] } };
+  await runAlerts(e);
+  assert.equal(errorPosts().length, 1);
+  const text = errorPosts()[0].body.embeds[0].description;
+  assert.match(text, /Could not log in to Eldorado/);
+  assert.match(text, /rate-limiting/);
+  assert.doesNotMatch(text, /rejected the API credentials/);
+});
+
+test('login: a real refusal (401) is still reported as rejected credentials', async () => {
+  const { runAlerts } = await load('alerts.js');
+  const e = loginEnv();
+  tokenReply = { status: 401, body: { messages: ['Invalid client credentials.'] } };
+  await runAlerts(e);
+  assert.equal(errorPosts().length, 1);
+  assert.match(errorPosts()[0].body.embeds[0].description, /rejected the API credentials \(Invalid client credentials\.\)/);
+});
+
+test('login: Eldorado being down (503) says so, not credentials', async () => {
+  const { runAlerts } = await load('alerts.js');
+  const e = loginEnv();
+  tokenReply = { status: 503, body: {} };
+  await runAlerts(e);
+  assert.equal(errorPosts().length, 1);
+  assert.match(errorPosts()[0].body.embeds[0].description, /Could not log in to Eldorado .* status 503/);
 });
 
 // ---------- expiring ----------

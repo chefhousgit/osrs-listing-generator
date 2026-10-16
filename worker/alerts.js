@@ -51,7 +51,7 @@ async function getToken(env) {
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body.accessToken) {
-    throw new Error((body.messages && body.messages.join(' ')) || 'status ' + res.status);
+    throw Object.assign(new Error((body.messages && body.messages.join(' ')) || 'status ' + res.status), { status: res.status });
   }
   return body.accessToken;
 }
@@ -447,8 +447,17 @@ export async function runAlerts(env, { forceSummary = false } = {}) {
   let token;
   try {
     token = await cachedToken(env);
+    await clearRateLimit(env, 'auth');
   } catch (err) {
-    await alertOnce(env, 'auth', `Eldorado rejected the API credentials (${err.message}). Sales alerts are paused until new credentials are set with \`wrangler secret put\`.`);
+    // Only a refusal (400 / 401 / 403) means bad credentials. A rate limit (429) is quiet unless it
+    // lasts RATE_LIMIT_GRACE_HOURS; Eldorado being down or unreachable is reported as just that.
+    // Either way the next run (5 minutes later) logs in again.
+    if ([400, 401, 403].includes(err.status)) {
+      await alertOnce(env, 'auth', `Eldorado rejected the API credentials (${err.message}). Sales alerts are paused until new credentials are set with \`wrangler secret put\`.`);
+    } else {
+      await reportProblem(env, 'auth', err, 'Could not log in to Eldorado (sales alerts are retried every 5 minutes).');
+    }
+    await recordRun(env, ['login: ' + err.message]);
     return { ok: false, error: 'auth: ' + err.message };
   }
 
