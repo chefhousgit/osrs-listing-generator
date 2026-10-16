@@ -127,6 +127,17 @@ test('setup check: stopped checks, expiring credentials, sync off, failed backup
   assert.match(r.backup.detail, /failed \(500\)/);
 });
 
+test('setup check: rate limits row (none, recent hits, paused now)', async () => {
+  const none = await rowsOf(deps({ worker: async () => workerHealth({ rateLimits: [{ at: minsAgo(60 * 24 * 8), what: 'orders', by: 'worker' }], cooldown: null }) }));
+  assert.equal(none.ratelimits.status, 'ok', 'older than 7 days does not count');
+  const hits = await rowsOf(deps({ worker: async () => workerHealth({ rateLimits: [{ at: minsAgo(300), what: 'login', by: 'worker' }, { at: minsAgo(900), what: 'GET /api/x', by: 'OTHER-PC' }], cooldown: null }) }));
+  assert.equal(hits.ratelimits.status, 'warn');
+  assert.match(hits.ratelimits.text, /Hit 2 times in the last 7 days/);
+  assert.match(hits.ratelimits.detail, /login \(worker\).*GET \/api\/x \(OTHER-PC\)/);
+  const paused = await rowsOf(deps({ worker: async () => workerHealth({ rateLimits: [], cooldown: { until: new Date(NOW + 600000).toISOString(), what: 'login', by: 'worker' } }) }));
+  assert.match(paused.ratelimits.text, /paused until .* \(login, worker\)/);
+});
+
 // ---------- backup ----------
 test('backup: sends only listing.json / sale.json, only when something changed', async () => {
   const accounts = process.env.ACCOUNTS_DIR;

@@ -172,6 +172,20 @@ async function health(deps, now = Date.now()) {
     else rows.push(row('checks', '24/7 checks', 'ok', `Running every ${w.runEveryMinutes || 5} minutes (last recorded ${ago(run.at, now)}).`));
   }
 
+  // Rate limits: a pause in progress, and the hits of the last 7 days (Eldorado doesn't publish its limit)
+  if (w && Array.isArray(w.rateLimits)) {
+    const week = w.rateLimits.filter((h) => now - Date.parse(h.at) < 7 * 24 * 60 * MIN);
+    const when = (iso) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const detail = week.slice(0, 5).map((h) => `${when(h.at)}: ${h.what} (${h.by})`).join(' · ');
+    if (w.cooldown) {
+      rows.push(row('ratelimits', 'Rate limits', 'warn', `Eldorado calls are paused until ${new Date(w.cooldown.until).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} after a rate limit (${w.cooldown.what}, ${w.cooldown.by}).`, detail));
+    } else if (week.length) {
+      rows.push(row('ratelimits', 'Rate limits', 'warn', `Hit ${week.length} time${week.length === 1 ? '' : 's'} in the last 7 days; each time everything paused 15 minutes.`, detail));
+    } else {
+      rows.push(row('ratelimits', 'Rate limits', 'ok', 'None in the last 7 days.'));
+    }
+  }
+
   // Eldorado credentials
   const parts = [deps.eldoradoSet ? 'This PC: set.' : 'This PC: not set (ELDORADO_CLIENT_ID / SECRET in .env).'];
   let status = deps.eldoradoSet ? 'ok' : 'bad';

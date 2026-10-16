@@ -1,4 +1,4 @@
-import { runAlerts, sendTests, setAutoDrop, health } from './alerts.js';
+import { runAlerts, sendTests, setAutoDrop, health, tokenInfo, cooldown, noteRateLimit } from './alerts.js';
 import { saveBackup, listBackups, getBackup, latestBackups } from './backup.js';
 
 export default {
@@ -38,6 +38,28 @@ export default {
       const stock = { waiting: Number(body.waiting) || 0, listed: Number(body.listed) || 0, sold: Number(body.sold) || 0, at: new Date().toISOString() };
       await env.STATE.put("stock", JSON.stringify(stock));
       return json({ ok: true, stock });
+    }
+
+    // The Eldorado login token for the app, shared with the checks (one login for everyone):
+    // { stale?, pc } -> { token, expiresAt }. 429 { until } while paused after a rate limit.
+    if (url.pathname === "/alerts/token") {
+      const body = await request.json().catch(() => ({}));
+      const reply = (status, data) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } });
+      const paused = await cooldown(env);
+      if (paused) return reply(429, { error: "Paused after a rate limit.", until: paused.until });
+      try {
+        const info = await tokenInfo(env, { stale: body.stale });
+        return reply(200, { token: info.value, expiresAt: info.expiresAt });
+      } catch (err) {
+        if (err.status === 429) return reply(429, { error: err.message, until: (await noteRateLimit(env, "login", body.pc || "app")).until });
+        return reply(502, { error: err.message, status: err.status || null });
+      }
+    }
+
+    // The app hit a rate limit itself: { what, pc } -> pause everyone, log it. -> { until }
+    if (url.pathname === "/alerts/ratelimit") {
+      const body = await request.json().catch(() => ({}));
+      return json(await noteRateLimit(env, body.what, body.pc || "app"));
     }
 
     // The app's setup check (Settings page): last run, credentials, which channels are set, backups.

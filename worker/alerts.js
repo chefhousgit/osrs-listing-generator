@@ -53,16 +53,42 @@ async function getToken(env) {
   if (!res.ok || !body.accessToken) {
     throw Object.assign(new Error((body.messages && body.messages.join(' ')) || 'status ' + res.status), { status: res.status });
   }
-  return body.accessToken;
+  return { value: body.accessToken, expiresIn: Number(body.expiresIn) || 900 };
 }
 
-// Login token, reused from KV while it's valid (tokens last 15 minutes).
-async function cachedToken(env) {
-  const saved = await env.STATE.get('token');
-  if (saved) return saved;
-  const token = await getToken(env);
-  await env.STATE.put('token', token, { expirationTtl: 13 * 60 });
-  return token;
+// Login token, kept in KV until a minute before it expires (tokens last 15 minutes) and shared with
+// the app through /alerts/token, so the checks and both PCs log in once instead of each on their own.
+// stale: a token that Eldorado refused; a fresh one replaces it (unless someone already did).
+export async function tokenInfo(env, { stale } = {}) {
+  const saved = await env.STATE.get('token2', 'json');
+  if (saved && saved.value !== stale && Date.parse(saved.expiresAt) - Date.now() > 60 * 1000) return saved;
+  const { value, expiresIn } = await getToken(env);
+  const info = { value, expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString() };
+  await env.STATE.put('token2', JSON.stringify(info), { expirationTtl: Math.max(60, expiresIn - 60) });
+  return info;
+}
+
+const cachedToken = async (env) => (await tokenInfo(env)).value;
+
+// ---------- rate limits ----------
+// Eldorado doesn't publish its limit. After any "Quota exceeded" (429), from the checks or the app,
+// every Eldorado call pauses for COOLDOWN_MINUTES instead of retrying, and the hit is logged
+// (last RATE_LOG_SIZE, shown in the app's setup check) to learn when and where it happens.
+const COOLDOWN_MINUTES = 15;
+const RATE_LOG_SIZE = 30;
+
+export async function cooldown(env) {
+  const c = await env.STATE.get('cooldown', 'json');
+  return c && Date.parse(c.until) > Date.now() ? c : null;
+}
+
+export async function noteRateLimit(env, what, by = 'worker') {
+  const until = new Date(Date.now() + COOLDOWN_MINUTES * 60 * 1000).toISOString();
+  const entry = { at: new Date().toISOString(), what: String(what || '?').slice(0, 80), by: String(by || '?').slice(0, 40) };
+  await env.STATE.put('cooldown', JSON.stringify({ until, what: entry.what, by: entry.by }), { expirationTtl: COOLDOWN_MINUTES * 60 + 60 });
+  const log = (await env.STATE.get('rateLimits', 'json')) || [];
+  await env.STATE.put('rateLimits', JSON.stringify([entry, ...log].slice(0, RATE_LOG_SIZE)));
+  return { until };
 }
 
 async function getJson(token, path) {
@@ -156,6 +182,7 @@ async function alertOnce(env, key, text) {
 // anything else goes to #errors once a day.
 async function reportProblem(env, key, err, text) {
   if (err.status === 429) {
+    await noteRateLimit(env, key);
     const flag = 'ratelimited:' + key;
     const since = await env.STATE.get(flag);
     if (!since) {
@@ -166,7 +193,7 @@ async function reportProblem(env, key, err, text) {
     await alertOnce(env, key, `${text} Eldorado has been rate-limiting it since ${since.slice(11, 16)} UTC (${err.message}).`);
     return;
   }
-  if (err.status === 401) await env.STATE.delete('token'); // log in again next run
+  if (err.status === 401) await env.STATE.delete('token2'); // log in again next run
   await alertOnce(env, key, `${text} ${err.message}`);
 }
 
@@ -308,6 +335,10 @@ async function applyPriceDrops(env, token, offers, firstSeen) {
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
       body: JSON.stringify({ amount: target, currency: 'USD' })
     });
+    if (res.status === 429) {
+      await noteRateLimit(env, 'price drop');
+      break; // the rest wait for the next hourly run
+    }
     if (!res.ok) {
       await alertOnce(env, 'drop:' + id, `Auto price drop for "${offer.offerTitle}" failed (${res.status}).`);
       continue;
@@ -444,6 +475,13 @@ function credentialDaysLeft(env) {
 // ---------- entry point ----------
 // forceSummary: send the summary now (used by the manual test route).
 export async function runAlerts(env, { forceSummary = false } = {}) {
+  // Paused after a rate limit (from these checks or the app): no Eldorado calls until it ends.
+  const paused = await cooldown(env);
+  if (paused) {
+    await recordRun(env, [`paused until ${paused.until.slice(11, 16)} UTC after a rate limit (${paused.what}, ${paused.by})`]);
+    return { ok: false, paused: paused.until };
+  }
+
   let token;
   try {
     token = await cachedToken(env);
@@ -475,11 +513,15 @@ export async function runAlerts(env, { forceSummary = false } = {}) {
   const lastSummary = await env.STATE.get('summaryDay');
   const summaryDue = forceSummary || (local.hour >= summaryHour && lastSummary !== local.day);
 
-  // Offer list: from KV unless it's an hour old or the summary is about to use it.
+  // Offer list: from KV unless it's an hour old or the summary is about to use it. A rate limit
+  // earlier in this run means no more Eldorado calls (the summary waits for a later run too).
   let offers = [];
   let firstSeen = {};
   const cache = await env.STATE.get('offersCache', 'json');
-  if (cache && !summaryDue && Date.now() - cache.at < OFFERS_EVERY) {
+  const limited = Boolean(await cooldown(env));
+  if (limited) {
+    offers = cache ? cache.offers : [];
+  } else if (cache && !summaryDue && Date.now() - cache.at < OFFERS_EVERY) {
     offers = cache.offers;
   } else {
     try {
@@ -506,7 +548,7 @@ export async function runAlerts(env, { forceSummary = false } = {}) {
       : `Your Eldorado API credentials expire in ${days} day${days === 1 ? '' : 's'}. Generate new ones on the Seller API page and update ELDORADO_CREDS_EXPIRE.`);
   }
 
-  if (summaryDue) {
+  if (summaryDue && !(await cooldown(env))) {
     try {
       await sendSummary(env, token, offers, firstSeen);
       if (!forceSummary) await env.STATE.put('summaryDay', local.day);
@@ -519,12 +561,13 @@ export async function runAlerts(env, { forceSummary = false } = {}) {
 }
 
 // When the checks last ran, for the app's setup check. Written at most every RUN_RECORD_MINUTES
-// (or when the outcome changes) to keep KV writes low.
+// (or when the outcome or the first problem changes) to keep KV writes low.
 const RUN_RECORD_MINUTES = 30;
 async function recordRun(env, problems) {
   const last = await env.STATE.get('lastRun', 'json');
   const ok = problems.length === 0;
-  if (last && last.ok === ok && Date.now() - Date.parse(last.at) < RUN_RECORD_MINUTES * 60 * 1000) return;
+  const same = last && last.ok === ok && (last.problems || [])[0] === problems[0];
+  if (same && Date.now() - Date.parse(last.at) < RUN_RECORD_MINUTES * 60 * 1000) return;
   await env.STATE.put('lastRun', JSON.stringify({ at: new Date().toISOString(), ok, problems: problems.slice(0, 5) }));
 }
 
@@ -539,6 +582,8 @@ export async function health(env, backups) {
     credsExpire: env.ELDORADO_CREDS_EXPIRE || null,
     credsDaysLeft: credentialDaysLeft(env),
     channels: CHANNELS.map((c) => ({ name: c.name, set: Boolean(env[c.key] || (c.alt && env[c.alt])), secret: c.key, fallback: c.fallback || null })),
+    cooldown: await cooldown(env),
+    rateLimits: (await env.STATE.get('rateLimits', 'json')) || [],
     backups
   };
 }

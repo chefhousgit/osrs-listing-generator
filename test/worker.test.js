@@ -22,14 +22,22 @@ function fakeKV() {
 let posts;
 let eldoradoOrders = []; // what the fake Eldorado order list returns
 let tokenReply = null; // { status, body } for the login request, when a test sets one
+let ordersStatus = 200; // status of the order list (429 to simulate a rate limit)
+let eldoradoCalls = 0; // every request to Eldorado
 const realFetch = globalThis.fetch;
 test.beforeEach(() => {
   posts = [];
   eldoradoOrders = [];
   tokenReply = null;
+  ordersStatus = 200;
+  eldoradoCalls = 0;
   globalThis.fetch = async (url, init) => {
+    if (String(url).startsWith('https://www.eldorado.gg/')) eldoradoCalls++;
     if (String(url) === 'https://www.eldorado.gg/api/authentication/seller/token' && tokenReply) {
       return new Response(JSON.stringify(tokenReply.body), { status: tokenReply.status });
+    }
+    if (String(url).startsWith('https://www.eldorado.gg/api/v1/orders/me/seller/orders') && ordersStatus !== 200) {
+      return new Response(JSON.stringify({ messages: ['Quota exceeded.'] }), { status: ordersStatus });
     }
     if (String(url).startsWith('https://www.eldorado.gg/api/v1/orders/me/seller/orders')) {
       const size = Number(new URL(url).searchParams.get('pageSize'));
@@ -220,6 +228,73 @@ test('login: Eldorado being down (503) says so, not credentials', async () => {
   await runAlerts(e);
   assert.equal(errorPosts().length, 1);
   assert.match(errorPosts()[0].body.embeds[0].description, /Could not log in to Eldorado .* status 503/);
+});
+
+// ---------- shared token and rate-limit pause ----------
+test('token: one login is reused until a minute before it expires', async () => {
+  const { tokenInfo } = await load('alerts.js');
+  const e = env();
+  tokenReply = { status: 200, body: { accessToken: 'tok-1', expiresIn: 900 } };
+  const a = await tokenInfo(e);
+  tokenReply = { status: 200, body: { accessToken: 'tok-2', expiresIn: 900 } };
+  const b = await tokenInfo(e);
+  assert.equal(a.value, 'tok-1');
+  assert.equal(b.value, 'tok-1');
+  assert.equal(eldoradoCalls, 1);
+  const left = Date.parse(a.expiresAt) - Date.now();
+  assert.ok(left > 890 * 1000 && left <= 900 * 1000, 'expiry from Eldorado expiresIn');
+});
+
+test('token: a refused (stale) token is replaced, unless someone already replaced it', async () => {
+  const { tokenInfo } = await load('alerts.js');
+  const e = env();
+  tokenReply = { status: 200, body: { accessToken: 'tok-1', expiresIn: 900 } };
+  await tokenInfo(e);
+  tokenReply = { status: 200, body: { accessToken: 'tok-2', expiresIn: 900 } };
+  assert.equal((await tokenInfo(e, { stale: 'tok-1' })).value, 'tok-2');
+  assert.equal((await tokenInfo(e, { stale: 'tok-1' })).value, 'tok-2', 'an old stale token does not force another login');
+  assert.equal(eldoradoCalls, 2);
+});
+
+test('rate limit: a 429 pauses every Eldorado call for 15 minutes and is logged', async () => {
+  const { runAlerts } = await load('alerts.js');
+  const e = env();
+  tokenReply = { status: 200, body: { accessToken: 'tok-1', expiresIn: 900 } };
+  ordersStatus = 429;
+  await runAlerts(e);
+  const callsAfterHit = eldoradoCalls;
+  assert.equal(callsAfterHit, 2, 'login + orders, then nothing else in that run (no offers, no summary)');
+
+  const pause = await e.STATE.get('cooldown', 'json');
+  const left = Date.parse(pause.until) - Date.now();
+  assert.ok(left > 14 * 60 * 1000 && left <= 15 * 60 * 1000);
+  assert.deepEqual((await e.STATE.get('rateLimits', 'json')).map((h) => [h.what, h.by]), [['orders', 'worker']]);
+
+  ordersStatus = 200;
+  const out = await runAlerts(e);
+  assert.ok(out.paused, 'the next run is skipped');
+  assert.equal(eldoradoCalls, callsAfterHit, 'no Eldorado calls while paused');
+  assert.match((await e.STATE.get('lastRun', 'json')).problems[0], /^paused until/);
+});
+
+test('rate limit: runs resume once the pause is over', async () => {
+  const { runAlerts } = await load('alerts.js');
+  const e = env();
+  await e.STATE.put('cooldown', JSON.stringify({ until: new Date(Date.now() - 1000).toISOString(), what: 'orders', by: 'worker' }));
+  tokenReply = { status: 200, body: { accessToken: 'tok-1', expiresIn: 900 } };
+  const out = await runAlerts(e);
+  assert.equal(out.paused, undefined);
+  assert.ok(eldoradoCalls >= 2);
+});
+
+test('health: includes the pause and the rate-limit log', async () => {
+  const { health, noteRateLimit } = await load('alerts.js');
+  const e = env();
+  await noteRateLimit(e, 'login', 'GAMING-PC');
+  const h = await health(e, []);
+  assert.equal(h.cooldown.what, 'login');
+  assert.equal(h.cooldown.by, 'GAMING-PC');
+  assert.equal(h.rateLimits.length, 1);
 });
 
 // ---------- expiring ----------

@@ -2,9 +2,11 @@
 // except in the token request to Eldorado itself.
 //
 // Auth: POST /api/authentication/seller/token { clientId, clientSecret } -> { accessToken, expiresIn }.
-// Tokens last 15 minutes; we cache one and refresh a minute before it runs out.
+// Tokens last 15 minutes; we cache one and refresh a minute before it runs out. Normally the token
+// comes from the Worker (shared with the 24/7 checks and the other PC, see "shared token" below).
 // There is no sandbox: every call here acts on the live account.
 
+const os = require('os');
 const BASE_URL = 'https://www.eldorado.gg';
 const OSRS = require('./data/eldorado-osrs.json');
 
@@ -41,8 +43,69 @@ function describeError(body) {
   return String(body || '').slice(0, 500);
 }
 
+// ---------- shared token and rate limits (through the Worker, when PROXY_URL is set) ----------
+// Eldorado doesn't publish its rate limit and every PC plus the 24/7 checks use the same account,
+// so the app takes the Worker's login token instead of logging in itself, and after any 429
+// "Quota exceeded" everything (this app, the other PC, the checks) pauses Eldorado calls for a
+// while instead of retrying. Without a reachable Worker the app logs in on its own as before.
+const COOLDOWN_MS = 15 * 60 * 1000;
+let pausedUntil = 0;
+let staleToken = null; // a token Eldorado refused (401), so the Worker hands out a fresh one
+
+const hasWorker = () => Boolean(process.env.PROXY_URL && process.env.PROXY_SECRET);
+
+async function workerCall(route, body) {
+  const res = await fetch(process.env.PROXY_URL.replace(/\/+$/, '') + route, {
+    method: 'POST',
+    headers: { 'X-Proxy-Secret': process.env.PROXY_SECRET, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}),
+    signal: AbortSignal.timeout(10000)
+  });
+  return { status: res.status, ok: res.ok, body: await readBody(res) };
+}
+
+function pausedError() {
+  const at = new Date(pausedUntil).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return new EldoradoError(`Eldorado is rate-limiting requests, so Eldorado calls are paused until ${at} (the 24/7 checks pause too). Try again then.`, 429);
+}
+
+// A 429 from Eldorado: pause here, and tell the Worker so the checks and the other PC pause too.
+async function rateLimited(what) {
+  pausedUntil = Date.now() + COOLDOWN_MS;
+  if (hasWorker()) {
+    try {
+      const r = await workerCall('/alerts/ratelimit', { what, pc: os.hostname() });
+      if (r.ok && r.body && r.body.until) pausedUntil = Date.parse(r.body.until) || pausedUntil;
+    } catch (e) { /* the pause here still holds */ }
+  }
+  return pausedError();
+}
+
+// The Worker's token: a string, or null to log in here (Worker not set up, unreachable or older).
+async function tokenFromWorker() {
+  let r;
+  try {
+    r = await workerCall('/alerts/token', { stale: staleToken || undefined, pc: os.hostname() });
+  } catch (e) {
+    return null;
+  }
+  if (r.status === 429) {
+    pausedUntil = (r.body && Date.parse(r.body.until)) || Date.now() + COOLDOWN_MS;
+    throw pausedError();
+  }
+  if (!r.ok || !r.body || !r.body.token) return null;
+  staleToken = null;
+  cachedToken = { value: r.body.token, expiresAt: Date.parse(r.body.expiresAt) || Date.now() + 5 * 60 * 1000 };
+  return cachedToken.value;
+}
+
 async function getToken() {
+  if (Date.now() < pausedUntil) throw pausedError();
   if (cachedToken && cachedToken.expiresAt - Date.now() > 60 * 1000) return cachedToken.value;
+  if (hasWorker()) {
+    const shared = await tokenFromWorker();
+    if (shared) return shared;
+  }
 
   const res = await fetch(BASE_URL + '/api/authentication/seller/token', {
     method: 'POST',
@@ -53,12 +116,19 @@ async function getToken() {
     })
   });
   const body = await readBody(res);
+  if (res.status === 429) throw await rateLimited('login');
   if (!res.ok || !body || !body.accessToken) {
     cachedToken = null;
     throw new EldoradoError('Eldorado rejected the API credentials: ' + describeError(body), res.status, body);
   }
   cachedToken = { value: body.accessToken, expiresAt: Date.now() + (Number(body.expiresIn) || 900) * 1000 };
   return cachedToken.value;
+}
+
+// Eldorado refused this token: drop it and ask for a fresh one next time.
+function refused(token) {
+  cachedToken = null;
+  staleToken = token;
 }
 
 async function api(method, apiPath, payload) {
@@ -72,7 +142,8 @@ async function api(method, apiPath, payload) {
     body: payload === undefined ? undefined : JSON.stringify(payload)
   });
   const body = await readBody(res);
-  if (res.status === 401) cachedToken = null;
+  if (res.status === 401) refused(token);
+  if (res.status === 429) throw await rateLimited(`${method} ${apiPath.split('?')[0]}`);
   if (!res.ok) {
     throw new EldoradoError(`Eldorado ${method} ${apiPath} failed (${res.status}): ${describeError(body)}`, res.status, body);
   }
@@ -92,7 +163,8 @@ async function uploadOfferImage(file) {
     body: form
   });
   const body = await readBody(res);
-  if (res.status === 401) cachedToken = null;
+  if (res.status === 401) refused(token);
+  if (res.status === 429) throw await rateLimited('image upload');
   if (!res.ok) {
     throw new EldoradoError(`Eldorado image upload failed (${res.status}): ${describeError(body)}`, res.status, body);
   }
