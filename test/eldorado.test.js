@@ -198,3 +198,35 @@ test('fake Eldorado: the Swagger check catches unknown and missing fields', { sk
   assert.ok(errors.some((e) => /accountDetails is required/.test(e)));
   assert.ok(errors.some((e) => /category is required/.test(e)));
 });
+
+// ---------- buildAccountOffer: Pets Count ----------
+// 2026-10-17: "Required attribute 'Pets Count' is not set" while the Pets select showed 0: the
+// exact-number box was blank (no pet count read from the screenshots), so nothing was sent.
+function offerInput(over = {}) {
+  const attributes = Object.fromEntries(eldorado.OSRS.attributes.map((a) => [a.id, a.values[0].id]));
+  return {
+    title: 'T', description: 'D', price: '10', deliveryTime: eldorado.DELIVERY_TIMES.find((d) => d !== 'Instant'),
+    build: eldorado.OSRS.tradeEnvironments[0].id,
+    attributes: { ...attributes, ...(over.attributes || {}) },
+    numeric: { 'osrs-total-level-numeric': '1007', ...(over.numeric || {}) }
+  };
+}
+const numericValue = (offer, id) => {
+  const a = offer.augmentedGame.offerAttributes.find((x) => x.id === id);
+  return a ? a.value : undefined;
+};
+
+test('offer: a blank Pets Count takes the number picked in the Pets select (0)', () => {
+  const offer = eldorado.buildAccountOffer(offerInput({ attributes: { 'osrs-pets': 'pets-0' }, numeric: { 'osrs-pets-count-numeric': '' } }));
+  assert.equal(numericValue(offer, 'osrs-pets-count-numeric'), 0);
+});
+
+test('offer: a blank Pets Count takes a plain-number Pets pick (3)', () => {
+  const offer = eldorado.buildAccountOffer(offerInput({ attributes: { 'osrs-pets': 'pets-3' } }));
+  assert.equal(numericValue(offer, 'osrs-pets-count-numeric'), 3);
+});
+
+test('offer: a typed Pets Count wins over the Pets select', () => {
+  const offer = eldorado.buildAccountOffer(offerInput({ attributes: { 'osrs-pets': 'pets-0' }, numeric: { 'osrs-pets-count-numeric': '2' } }));
+  assert.equal(numericValue(offer, 'osrs-pets-count-numeric'), 2);
+});

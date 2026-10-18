@@ -912,7 +912,14 @@ app.post('/eldorado/publish', publishUpload, async (req, res) => {
     const mainImage = (files.mainImage || [])[0];
     const extraImages = files.extraImages || [];
     const result = await eldorado.publishPausedAccountOffer(payload, mainImage, extraImages);
-    // The offer exists now, so file the account folder away (if it came from one).
+    // The offer exists now: keep its card in the account folder, then file the folder away.
+    if (payload.folder && folders.isConfigured() && mainImage) {
+      try {
+        result.cardSavedTo = await folders.saveCard(String(payload.folder), mainImage);
+      } catch (err) {
+        result.cardError = err.message;
+      }
+    }
     if (payload.folder && folders.isConfigured()) {
       try {
         result.movedTo = await folders.moveToListed(String(payload.folder), {

@@ -177,6 +177,9 @@ async function uploadOfferImage(file) {
 
 const str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
+// Exact-number attribute -> the select whose pick fills it when the number is left blank.
+const NUMERIC_FROM_SELECT = { 'osrs-pets-count-numeric': 'osrs-pets' };
+
 // Validate the publish form and turn it into an AccountOfferCreatePrivateDTO.
 // Throws EldoradoError(400) with a readable message on bad input.
 function buildAccountOffer(input) {
@@ -204,7 +207,16 @@ function buildAccountOffer(input) {
     if (!value) bad(`Pick a value for ${attr.name}.`);
     return { id: attr.id, type: 'Select', values: [value.id] };
   });
-  const numbers = input.numeric || {};
+  const numbers = { ...(input.numeric || {}) };
+  // A blank exact number falls back to its select when that pick is a plain number: the Pets
+  // select defaults to 0 when no pet count is read, but Eldorado requires Pets Count itself.
+  Object.entries(NUMERIC_FROM_SELECT).forEach(([numId, selectId]) => {
+    const raw = numbers[numId];
+    if (raw !== undefined && raw !== null && raw !== '') return;
+    const attr = OSRS.attributes.find((a) => a.id === selectId);
+    const picked = attr && attr.values.find((v) => v.id === chosen[selectId]);
+    if (picked && /^\d+$/.test(picked.name.trim())) numbers[numId] = picked.name.trim();
+  });
   OSRS.numericAttributes.forEach((attr) => {
     const raw = numbers[attr.id];
     if (raw === undefined || raw === null || raw === '') return;
@@ -490,6 +502,7 @@ module.exports = {
   EldoradoError,
   isConfigured,
   publishPausedAccountOffer,
+  buildAccountOffer,
   listOffers,
   changePrice,
   pauseOffer,

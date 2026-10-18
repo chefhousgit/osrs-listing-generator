@@ -483,6 +483,8 @@
       } else {
         setNote(`Created (offer ${data.offerId}) but it could NOT be paused, so it is LIVE without images. Pause it on Eldorado now. ${data.pauseError || ''}`, 'error');
       }
+      if (data.cardSavedTo) noteEl.textContent += ' Card saved in the account folder.';
+      else if (data.cardError) noteEl.textContent += ` Could not save the card in the folder: ${data.cardError}`;
       if (data.movedTo) {
         noteEl.textContent += ` Folder moved to ${data.movedTo}.`;
         if (window.folderPublished) window.folderPublished();

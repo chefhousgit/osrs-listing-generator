@@ -180,6 +180,16 @@ const writeJson = (file, data) => fs.writeFile(file, JSON.stringify(data, null, 
 
 // Move a published account into the listed folder, recording its offer (listing.json) so a later
 // sale can be matched to it. Returns the full path it ended up at.
+// The listing card used as the offer's main image, kept in the account folder (so it moves to
+// Listed with it). Returns the file written.
+const CARD_EXT = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp' };
+async function saveCard(name, image) {
+  const dir = await resolveFolder(name);
+  const file = path.join(dir, 'listing-card' + (CARD_EXT[image.mimetype] || '.png'));
+  await fs.writeFile(file, image.buffer);
+  return file;
+}
+
 async function moveToListed(name, listing) {
   const target = await moveDir(await resolveFolder(name), listedDir(), name);
   if (listing) await writeJson(path.join(target, LISTING_FILE), listing);
@@ -243,6 +253,6 @@ async function readListedOrSoldLogin(where, name) {
 }
 
 module.exports = {
-  isConfigured, listFolders, listImages, readImage, readLogin, moveToListed, parseFolderName, parseLine,
+  isConfigured, listFolders, listImages, readImage, readLogin, saveCard, moveToListed, parseFolderName, parseLine,
   listedDir, soldDir, listedFolders, soldFolders, moveListedToSold, moveSoldToListed, linkListedFolder, readListedOrSoldLogin
 };

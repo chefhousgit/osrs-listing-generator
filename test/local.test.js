@@ -205,3 +205,20 @@ test('reviews page: positive rate, tags, by type; unreviewed and canceled sales 
     fake.restore();
   }
 });
+
+// 2026-10-17: the listing card used as the offer's main image is kept in the account folder.
+test('card: saved into the account folder as listing-card.png / .jpg; other folders refused', async () => {
+  const accounts = path.join(tmp, 'card-accounts');
+  write(path.join(accounts, '1007 Total Level Ironman', 'shot.png'), 'x');
+  process.env.ACCOUNTS_DIR = accounts;
+  try {
+    const saved = await folders.saveCard('1007 Total Level Ironman', { buffer: Buffer.from('PNG'), mimetype: 'image/png' });
+    assert.equal(saved, path.join(accounts, '1007 Total Level Ironman', 'listing-card.png'));
+    assert.equal(fs.readFileSync(saved, 'utf8'), 'PNG');
+    const jpg = await folders.saveCard('1007 Total Level Ironman', { buffer: Buffer.from('JPG'), mimetype: 'image/jpeg' });
+    assert.equal(path.basename(jpg), 'listing-card.jpg');
+    await assert.rejects(folders.saveCard('..', { buffer: Buffer.from('x'), mimetype: 'image/png' }), { status: 404 });
+  } finally {
+    process.env.ACCOUNTS_DIR = '';
+  }
+});
