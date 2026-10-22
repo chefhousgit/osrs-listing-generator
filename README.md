@@ -157,7 +157,8 @@ Seven channels, one webhook each (channel settings > Integrations > Webhooks > N
 | `#listed` | Every offer the app creates, with the listing card, type, total level, price, delivery and offer ID | the app, while it runs |
 | `#price-drops` | Each auto price drop: old and new price, days listed, floor (set `DISCORD_WEBHOOK_PRICE_DROPS` as a Worker secret; until then they go to #summary) | the Worker, 24/7 |
 | `#errors` | Publish failed, offer left live (@here), folder not moved, no login details sent; Eldorado rejecting the API credentials or credentials about to expire; an offer expiring within 2 days | the app and the Worker |
-| `#sales` | New orders, cancellations, completed orders | the Worker, 24/7 |
+| `#sales` | New orders, cancellations | the Worker, 24/7 |
+| `#completed` | Completed orders (funds released) (go to `#sales` until `DISCORD_WEBHOOK_COMPLETED` is set) | the Worker, 24/7 |
 | `#disputes` | Disputes, with @here and the reason (go to `#sales` until this webhook is set) | the Worker, 24/7 |
 | `#reviews` | New buyer reviews with their tags and message, @here on a negative one, and ratings that change later (go to `#sales` until `DISCORD_WEBHOOK_REVIEWS` is set) | the Worker, 24/7 |
 | `#summary` | Once a day: listed / sold / revenue in the last 24h, sold this week, offers on Eldorado, account folders (waiting / Listed / Sold, sent by the app), accounts listed 14+ days with no sale, offers expiring within 3 days | the Worker, 24/7 |
@@ -181,6 +182,7 @@ DISCORD_WEBHOOK_ERRORS=https://discord.com/api/webhooks/...
    npx wrangler secret put DISCORD_WEBHOOK_SALES
    npx wrangler secret put DISCORD_WEBHOOK_DISPUTES
    npx wrangler secret put DISCORD_WEBHOOK_PRICE_DROPS
+   npx wrangler secret put DISCORD_WEBHOOK_COMPLETED
    npx wrangler secret put DISCORD_WEBHOOK_REVIEWS
    npx wrangler secret put DISCORD_WEBHOOK_SUMMARY
    npx wrangler secret put DISCORD_WEBHOOK_ERRORS

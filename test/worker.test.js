@@ -175,6 +175,36 @@ test('sales: an order created earlier that only shows up now (paid later) is sti
   assert.equal(salePosts().length, 1);
 });
 
+test('completed: goes to #completed, new sales and cancellations stay in #sales', async () => {
+  const { checkOrders } = await load('alerts.js');
+  const e = env({ DISCORD_WEBHOOK_COMPLETED: 'https://discord.test/completed' });
+  const now = new Date().toISOString();
+  const a = { ...order('a', null), state: { state: 'Delivered' }, createdDate: now };
+  const b = { ...order('b', null), state: { state: 'Paid' }, createdDate: now };
+  eldoradoOrders = [a, b];
+  await checkOrders(e, 'token');
+  const fresh = { ...order('c', null), state: { state: 'Paid' }, createdDate: now };
+  eldoradoOrders = [fresh, { ...a, state: { state: 'Completed' } }, { ...b, state: { state: 'Canceled' } }];
+  await checkOrders(e, 'token');
+  assert.deepEqual(posts.map((p) => [p.url.split('/').pop(), p.body.embeds[0].title.split(':')[0]]).sort(), [
+    ['completed', '✅ Completed'],
+    ['sales', '❌ Order canceled'],
+    ['sales', '💰 Sold']
+  ]);
+});
+
+test('completed: without DISCORD_WEBHOOK_COMPLETED it stays in #sales', async () => {
+  const { checkOrders } = await load('alerts.js');
+  const e = env();
+  const a = { ...order('a', null), state: { state: 'Delivered' }, createdDate: new Date().toISOString() };
+  eldoradoOrders = [a];
+  await checkOrders(e, 'token');
+  eldoradoOrders = [{ ...a, state: { state: 'Completed' } }];
+  await checkOrders(e, 'token');
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].url, 'https://discord.test/sales');
+});
+
 test('sales: an order with no created date is treated as new (never silently dropped)', async () => {
   const { checkOrders } = await load('alerts.js');
   const e = env();

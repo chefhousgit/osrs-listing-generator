@@ -1,6 +1,7 @@
 // Discord alerts from Eldorado, run by the Worker's cron trigger every 5 minutes (24/7).
 //
-//   #sales    new orders, cancellations, completed orders
+//   #sales    new orders, cancellations
+//   #completed completed orders, funds released (DISCORD_WEBHOOK_COMPLETED; falls back to #sales)
 //   #disputes disputes (@here); falls back to #sales if DISCORD_WEBHOOK_DISPUTES is not set
 //   #summary  once a day at SUMMARY_HOUR in TIMEZONE: last 24h listed / sold / revenue, sold this
 //             week, stock (offers + the app's folder counts), stale and soon-expiring offers
@@ -126,6 +127,7 @@ const disputesHook = (env) => env.DISCORD_WEBHOOK_DISPUTES || env.DISCORD_WEBHOO
 const errorsHook = (env) => env.DISCORD_WEBHOOK_ERRORS || env.DISCORD_WEBHOOK_ALERTS;
 const priceDropsHook = (env) => env.DISCORD_WEBHOOK_PRICE_DROPS || env.DISCORD_WEBHOOK_LISTED || env.DISCORD_WEBHOOK_SUMMARY;
 const reviewsHook = (env) => env.DISCORD_WEBHOOK_REVIEWS || env.DISCORD_WEBHOOK_SALES;
+const completedHook = (env) => env.DISCORD_WEBHOOK_COMPLETED || env.DISCORD_WEBHOOK_SALES;
 const expiringHook = (env) => env.DISCORD_WEBHOOK_EXPIRING || errorsHook(env);
 
 // Each Worker channel: its own secret, and where it goes when that isn't set (for the app's setup check).
@@ -135,6 +137,7 @@ const CHANNELS = [
   { name: 'summary', key: 'DISCORD_WEBHOOK_SUMMARY' },
   { name: 'errors', key: 'DISCORD_WEBHOOK_ERRORS', alt: 'DISCORD_WEBHOOK_ALERTS' },
   { name: 'price-drops', key: 'DISCORD_WEBHOOK_PRICE_DROPS', fallback: 'listed / summary' },
+  { name: 'completed', key: 'DISCORD_WEBHOOK_COMPLETED', fallback: 'sales' },
   { name: 'reviews', key: 'DISCORD_WEBHOOK_REVIEWS', fallback: 'sales' },
   { name: 'expiring', key: 'DISCORD_WEBHOOK_EXPIRING', fallback: 'errors' }
 ];
@@ -235,7 +238,7 @@ export async function checkOrders(env, token) {
         } else if (state === 'Canceled') {
           await post(env.DISCORD_WEBHOOK_SALES, { embeds: [orderEmbed(order, '❌ Order canceled', COLORS.cancel)] });
         } else if (state === 'Completed') {
-          await post(env.DISCORD_WEBHOOK_SALES, { embeds: [orderEmbed(order, '✅ Completed', COLORS.done, 'Funds released.')] });
+          await post(completedHook(env), { embeds: [orderEmbed(order, '✅ Completed', COLORS.done, 'Funds released.')] });
         }
       }
     }
@@ -589,7 +592,7 @@ export async function health(env, backups) {
 }
 
 // ---------- test posts: one sample message to each Worker webhook ----------
-// only: send to that one channel (sales, disputes, summary, errors, price-drops, reviews, expiring).
+// only: send to that one channel (sales, completed, disputes, summary, errors, price-drops, reviews, expiring).
 export async function sendTests(env, only) {
   const want = (name) => !only || only === name;
   const sample = {
@@ -604,6 +607,10 @@ export async function sendTests(env, only) {
   if (want('sales') && env.DISCORD_WEBHOOK_SALES) {
     await post(env.DISCORD_WEBHOOK_SALES, { content: 'Test message, ignore.', embeds: [orderEmbed(sample, '💰 Sold', COLORS.sale, 'Hand over the account, then mark the order delivered.')] });
     sent.push('sales');
+  }
+  if (want('completed') && completedHook(env)) {
+    await post(completedHook(env), { content: 'Test message, ignore.', embeds: [orderEmbed({ ...sample, state: { state: 'Completed' } }, '✅ Completed', COLORS.done, 'Funds released.')] });
+    sent.push(env.DISCORD_WEBHOOK_COMPLETED ? 'completed' : 'completed (to #sales: DISCORD_WEBHOOK_COMPLETED not set)');
   }
   if (want('disputes') && disputesHook(env)) {
     await post(disputesHook(env), { content: 'Test message, ignore (a real dispute pings @here).', embeds: [orderEmbed({ ...sample, state: { state: 'Disputed' } }, '🚨 Dispute opened (Items Missing From Account)', COLORS.dispute, 'Reply on Eldorado.')] });

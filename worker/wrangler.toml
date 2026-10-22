@@ -25,5 +25,6 @@ ELDORADO_CREDS_EXPIRE = "2027-10-12"
 #   ELDORADO_CLIENT_ID, ELDORADO_CLIENT_SECRET
 #   DISCORD_WEBHOOK_SALES, DISCORD_WEBHOOK_DISPUTES, DISCORD_WEBHOOK_SUMMARY, DISCORD_WEBHOOK_ERRORS
 #   DISCORD_WEBHOOK_PRICE_DROPS (optional: auto price drops; otherwise #listed / #summary)
+#   DISCORD_WEBHOOK_COMPLETED (optional: completed orders / funds released; otherwise #sales)
 #   DISCORD_WEBHOOK_REVIEWS (optional: buyer reviews; otherwise #sales)
 #   DISCORD_WEBHOOK_EXPIRING (optional: offers expiring within 2 days; otherwise #errors)
