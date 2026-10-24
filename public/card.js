@@ -12,6 +12,7 @@
 
 (function () {
   const LOGO_SRC = 'assets/afkvault-logo.jpg';
+  const WATERMARK_SRC = 'assets/afkvault-watermark.jpg'; // the treasure-chest logo, on black
   const PREFS_KEY = 'osrs-card-prefs-v1';
   const FONT = '"Poppins", "Segoe UI", Arial, sans-serif';
   const MAX_IMAGES = 3;
@@ -39,6 +40,7 @@
   const noteEl = document.getElementById('cardNote');
 
   let logo = null;            // HTMLImageElement
+  let watermark = null;       // HTMLImageElement
   let stonePattern = null;    // CanvasPattern, built once
   let entries = [];           // [{ file, img, url, redacted, checked }]
   let renderQueued = false;
@@ -82,6 +84,7 @@
 
   async function ensureLogo() {
     if (!logo) logo = await loadImage(LOGO_SRC);
+    if (!watermark) watermark = await loadImage(WATERMARK_SRC).catch(() => logo);
     return logo;
   }
 
@@ -289,14 +292,15 @@
     }
 
     // Watermark over the whole panel.
-    if (logo && alpha > 0) {
+    const mark = watermark || logo;
+    if (mark && alpha > 0) {
       const pw = W - 2 * BORDER, ph = H - 2 * BORDER;
       const s = Math.min(pw, ph) * 0.85;
       ctx.save();
       ctx.globalAlpha = alpha;
-      // Screen blend: the logo's black background drops out, only the gold shows.
+      // Screen blend: the image's black background drops out, only the gold shows.
       ctx.globalCompositeOperation = 'screen';
-      ctx.drawImage(logo, BORDER + (pw - s) / 2, BORDER + (ph - s) / 2, s, s);
+      ctx.drawImage(mark, BORDER + (pw - s) / 2, BORDER + (ph - s) / 2, s, s);
       ctx.restore();
     }
 

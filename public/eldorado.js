@@ -102,6 +102,7 @@
       input.inputMode = 'numeric';
       input.placeholder = `${attr.min}-${attr.max}`;
       input.addEventListener('input', () => {
+        input.classList.remove('guessed');
         if (attr.id === 'osrs-total-level-numeric') queueAutoCard();
         const select = attrSelects[NUMERIC_TO_SELECT[attr.id]];
         const id = bracketFor(NUMERIC_TO_SELECT[attr.id], toNumber(input.value));
@@ -185,6 +186,9 @@
     };
   }
 
+  // Exact numbers Eldorado now wants filled even when the listing doesn't say: 0 (amber, check it).
+  const NUMERIC_FALLBACKS = { 'osrs-quest-points-numeric': 0, 'osrs-pets-count-numeric': 0 };
+
   function prefill(ctx) {
     const s = stats(ctx.result);
     const exact = {
@@ -193,7 +197,12 @@
       'osrs-quest-points-numeric': s.questPoints,
       'osrs-pets-count-numeric': s.pets
     };
-    Object.entries(numInputs).forEach(([id, input]) => { input.value = exact[id] != null ? String(exact[id]) : ''; });
+    Object.entries(numInputs).forEach(([id, input]) => {
+      const guessed = exact[id] == null && id in NUMERIC_FALLBACKS;
+      const value = guessed ? NUMERIC_FALLBACKS[id] : exact[id];
+      input.value = value != null ? String(value) : '';
+      input.classList.toggle('guessed', guessed);
+    });
 
     const values = {
       'osrs-account-type': accountTypeValue(ctx),

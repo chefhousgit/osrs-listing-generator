@@ -1,12 +1,11 @@
 // Buyer handover message, sent to the buyer after a sale. Shared by the listing page (app.js)
 // and the Orders page (orders.js).
 
+// No links: Eldorado blocks extra links in buyer messages.
 window.HANDOVER_TEMPLATE = `RSN: {rsn}
-2FA Secret Key: 
+2FA Secret Key:
 
-
-2FA Secret Key Generator:
-https://totp.danhersam.com/
+You can search "OTP Generator" and use one to generate your 6 digit code using the secret key above.
 
 Please send a message confirming you have logged into the account so I can remove the account details from my panel. If you have any other questions or concerns feel free to reach out. Thank you!`;
 

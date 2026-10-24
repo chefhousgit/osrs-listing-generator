@@ -1520,7 +1520,8 @@ html, body {
   border-color: var(--danger);
 }
 
-.eldorado-body select.guessed {
+.eldorado-body select.guessed,
+.eldorado-body input.guessed {
   border-color: var(--gold);
   box-shadow: 0 0 0 1px var(--gold-dim);
 }
