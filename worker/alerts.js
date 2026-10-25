@@ -607,14 +607,14 @@ async function runChecks(env, { forceSummary = false } = {}) {
       firstSeen = await trackOffers(env, offers);
       await applyPriceDrops(env, token, offers, firstSeen);
       await warnExpiring(env, offers);
-      await env.STATE.put('offersCache', JSON.stringify({ at: Date.now(), offers }));
+      await env.STATE.put('offersCache', JSON.stringify({ at: Date.now(), offers, full: true })); // full: whole offers (older copies were trimmed)
       await clearRateLimit(env, 'offers');
     } catch (err) {
       problems.push('offers: ' + err.message);
       await reportProblem(env, 'offers', err, 'Could not read your Eldorado offers (stock and stale listings in the summary).');
       if (cache) offers = cache.offers; // last known list is better than none
       // Back off: try again in 15 minutes rather than on every 5-minute run.
-      await env.STATE.put('offersCache', JSON.stringify({ at: Date.now() - OFFERS_EVERY + 15 * 60 * 1000, offers: cache ? cache.offers : [] }));
+      await env.STATE.put('offersCache', JSON.stringify({ at: Date.now() - OFFERS_EVERY + 15 * 60 * 1000, offers: cache ? cache.offers : [], full: Boolean(cache && cache.full) }));
     }
   }
   if (!Object.keys(firstSeen).length) firstSeen = (await env.STATE.get('offers', 'json')) || {};

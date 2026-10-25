@@ -148,7 +148,7 @@ test('while paused after a rate limit, the (latest) copy is still used', async (
 test('offers come from the Worker copy; Refresh (live) reads Eldorado and hands the list to the Worker', async () => {
   let pushed = null;
   const eldorado = setup(workerWith({
-    '/alerts/offers': { status: 200, body: { at: Date.now() - 10 * 60000, offers: [fx.offer({ offerTitle: 'From the copy' })] } },
+    '/alerts/offers': { status: 200, body: { at: Date.now() - 10 * 60000, full: true, offers: [fx.offer({ offerTitle: 'From the copy' })] } },
     '/alerts/offers/update': (body) => { pushed = body; return { status: 200, body: { ok: true } }; }
   }));
   fake.state.offers.set(fx.OFFER_ID, fx.offer({ offerTitle: 'Live title' }));
@@ -160,7 +160,8 @@ test('offers come from the Worker copy; Refresh (live) reads Eldorado and hands 
 });
 
 test('offers are read live when the copy is marked stale (a new offer) or over an hour old', async () => {
-  for (const body of [{ at: Date.now(), offers: [], stale: true }, { at: Date.now() - 2 * 3600000, offers: [] }]) {
+  // stale (a new offer), over an hour old, or an old trimmed copy (no full flag, from before this version)
+  for (const body of [{ at: Date.now(), full: true, offers: [], stale: true }, { at: Date.now() - 2 * 3600000, full: true, offers: [] }, { at: Date.now(), offers: [{ id: 'x' }] }]) {
     const eldorado = setup(workerWith({ '/alerts/offers': { status: 200, body } }));
     fake.state.offers.set(fx.OFFER_ID, fx.offer());
     assert.equal((await eldorado.listOffers()).length, 1);

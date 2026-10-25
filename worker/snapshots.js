@@ -80,6 +80,7 @@ export async function updateOffers(env, body) {
   const cache = (await env.STATE.get('offersCache', 'json')) || { at: 0, offers: [] };
   if (Array.isArray(body.offers)) {
     cache.offers = body.offers;
+    cache.full = true;
     cache.at = Date.now();
     cache.stale = false;
   } else if (body.replace && body.replace.id) {

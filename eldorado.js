@@ -417,7 +417,8 @@ function ordersFresh(snap) {
 async function listOffers({ live = false } = {}) {
   if (!live) {
     const snap = await fromWorker('/alerts/offers');
-    if (snap && Array.isArray(snap.offers) && !snap.stale && Date.now() - Number(snap.at) < OFFERS_FRESH_MS) {
+    // full: whole offers (a copy from before this was trimmed to what the alerts needed).
+    if (snap && snap.full && Array.isArray(snap.offers) && !snap.stale && Date.now() - Number(snap.at) < OFFERS_FRESH_MS) {
       sources.offers = { from: 'worker', at: new Date(Number(snap.at)).toISOString() };
       return snap.offers.map(summarizeOffer);
     }
