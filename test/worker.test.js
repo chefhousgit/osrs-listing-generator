@@ -426,3 +426,121 @@ test('backup: the PC name is cleaned before it becomes a key', async () => {
   await saveBackup(e, { pc: 'My PC:/latest', listed: [], sold: [] });
   assert.ok(e.STATE.m.has('backup:MyPClatest:latest'));
 });
+
+// ---------- copies for the app (snapshots.js) and the request log ----------
+test('copies: the latest orders are saved slimmed (no buyer names) and only rewritten on change', async () => {
+  const { checkOrders } = await load('alerts.js');
+  const e = env();
+  let writes = 0;
+  const put = e.STATE.put.bind(e.STATE);
+  e.STATE.put = async (k, v, o) => { if (k === 'ordersLatest') writes++; return put(k, v, o); };
+  eldoradoOrders = sales(3);
+  await checkOrders(e, 'token');
+  await checkOrders(e, 'token');
+  const snap = await e.STATE.get('ordersLatest', 'json');
+  assert.equal(snap.orders.length, 3);
+  assert.equal(writes, 1, 'unchanged on the second check: not written again');
+  assert.doesNotMatch(JSON.stringify(snap), /SecretBuyer42/);
+  const allowed = ['createdDate', 'id', 'offerId', 'orderOfferDetails', 'review', 'state', 'totalPrice'];
+  assert.deepEqual(Object.keys(snap.orders[0]).filter((k) => !allowed.includes(k)), [], 'only the fields the app uses');
+});
+
+test('history: first read is paced one page per run, then new orders are merged in', async () => {
+  const { runAlerts } = await load('alerts.js');
+  const e = env();
+  tokenReply = { status: 200, body: { accessToken: 'tok-1', expiresIn: 900 } };
+  // 120 orders: pages of 50 with cursors.
+  const all = sales(120);
+  const realFetch2 = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    const u = new URL(String(url));
+    if (u.pathname === '/api/v1/orders/me/seller/orders') {
+      eldoradoCalls++;
+      const from = Number(u.searchParams.get('cursorValue') || 0);
+      const results = all.slice(from, from + 50);
+      return new Response(JSON.stringify({ results, nextPageCursor: from + 50 < all.length ? String(from + 50) : null }), { status: 200 });
+    }
+    if (u.pathname === '/api/flexibleOffers/me/search') { eldoradoCalls++; return new Response(JSON.stringify({ results: [], totalPages: 1 }), { status: 200 }); }
+    return realFetch2(url, init);
+  };
+  const before = eldoradoCalls;
+  await runAlerts(e); // login + orders (page 1 starts the read) + offers
+  assert.equal((await e.STATE.get('historyCrawl', 'json')).orders.length, 50);
+  assert.equal(eldoradoCalls - before, 3, 'no extra request for the first page');
+  await runAlerts(e); // orders + page 2
+  await runAlerts(e); // orders + page 3 (last)
+  const hist = await e.STATE.get('orderHistory', 'json');
+  assert.equal(hist.orders.length, 120);
+  assert.equal(hist.complete, true);
+  assert.equal(await e.STATE.get('historyCrawl'), null);
+
+  const fresh = { ...order('brand-new', null), state: { state: 'Paid' }, createdDate: new Date(Date.now() + 1000).toISOString() };
+  all.unshift(fresh);
+  const callsBeforeMerge = eldoradoCalls;
+  await runAlerts(e);
+  assert.equal(eldoradoCalls - callsBeforeMerge, 1, 'only the usual order check once the history exists');
+  const merged = await e.STATE.get('orderHistory', 'json');
+  assert.equal(merged.orders.length, 121);
+  assert.equal(merged.orders[0].id, 'brand-new');
+});
+
+test('copies: the app can patch, replace, remove offers and mark the list stale', async () => {
+  const { updateOffers, updateOrder } = await load('snapshots.js');
+  const e = env();
+  await e.STATE.put('offersCache', JSON.stringify({ at: 123, offers: [{ id: 'a', offerState: 'Active' }, { id: 'b', offerState: 'Active' }] }));
+  await updateOffers(e, { patch: { id: 'a', offerState: 'Paused' } });
+  await updateOffers(e, { replace: { id: 'b', offerTitle: 'New title' } });
+  await updateOffers(e, { remove: 'a' });
+  await updateOffers(e, { stale: true });
+  const cache = await e.STATE.get('offersCache', 'json');
+  assert.deepEqual(cache, { at: 123, offers: [{ id: 'b', offerTitle: 'New title' }], stale: true });
+  await updateOffers(e, { offers: [{ id: 'c' }] });
+  const fresh = await e.STATE.get('offersCache', 'json');
+  assert.equal(fresh.stale, false);
+  assert.ok(fresh.at > 123);
+  assert.equal((await updateOffers(e, {})).status, 400);
+
+  await e.STATE.put('ordersLatest', JSON.stringify({ at: 'x', orders: [{ id: 'o1', state: { state: 'Paid' } }] }));
+  await updateOrder(e, { id: 'o1', state: 'Delivered' });
+  assert.equal((await e.STATE.get('ordersLatest', 'json')).orders[0].state.state, 'Delivered');
+});
+
+test('request log: counts per source in 5-minute blocks, shown before each rate-limit hit', async () => {
+  const { logCalls, callsBefore } = await load('snapshots.js');
+  const { health, noteRateLimit } = await load('alerts.js');
+  const e = env();
+  const block = (minsAgo) => new Date(Math.floor((Date.now() - minsAgo * 60000) / 300000) * 300000).toISOString().slice(0, 16);
+  await logCalls(e, 'worker', { [block(0)]: 2, [block(10)]: 1, [block(50)]: 1 });
+  await logCalls(e, 'LegionPC', { [block(0)]: 7, [block(10)]: 4 });
+  await logCalls(e, 'LegionPC', { [block(0)]: 1, 'not-a-block': 99, [block(2000)]: 5 });
+  const log = await e.STATE.get('callLog', 'json');
+  assert.deepEqual(callsBefore(log, new Date().toISOString(), 5), { worker: 2, LegionPC: 8 });
+  assert.deepEqual(callsBefore(log, new Date().toISOString(), 15), { worker: 3, LegionPC: 12 });
+  assert.deepEqual(callsBefore(log, new Date().toISOString(), 60), { worker: 4, LegionPC: 12 });
+  assert.equal(Object.keys(log).length, 3, 'older than 24 hours and bad keys dropped');
+
+  await noteRateLimit(e, 'orders', 'worker', 120);
+  const h = await health(e, []);
+  assert.deepEqual(h.rateLimits[0].before.m15, { worker: 3, LegionPC: 12 });
+  assert.equal(h.rateLimits[0].retryAfter, 120);
+  assert.deepEqual(h.calls.lastHour, { worker: 4, LegionPC: 12 });
+});
+
+test('request log: each run logs the Worker\'s own requests', async () => {
+  const { runAlerts } = await load('alerts.js');
+  const e = env();
+  tokenReply = { status: 200, body: { accessToken: 'tok-1', expiresIn: 900 } };
+  await e.STATE.put('orderHistory', JSON.stringify({ at: 'x', orders: [], complete: true, rebuiltDay: '2999-01-01' }));
+  await runAlerts(e);
+  const log = await e.STATE.get('callLog', 'json');
+  const total = Object.values(log).reduce((s, b) => s + (b.worker || 0), 0);
+  assert.equal(total, eldoradoCalls);
+});
+
+test('rate limit: a Retry-After longer than 15 minutes makes the pause longer', async () => {
+  const { noteRateLimit } = await load('alerts.js');
+  const e = env();
+  const { until } = await noteRateLimit(e, 'orders', 'worker', 3600);
+  const left = Date.parse(until) - Date.now();
+  assert.ok(left > 59 * 60000 && left <= 60 * 60000);
+});

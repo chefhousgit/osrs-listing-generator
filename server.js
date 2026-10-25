@@ -851,8 +851,9 @@ function offerRoute(handler) {
   };
 }
 
-app.get('/eldorado/offers', offerRoute(async () => {
-  const [offers, { firstSeen, autodrop }] = await Promise.all([eldorado.listOffers(), offerAges()]);
+// The Worker's copy of your offers (?live=1: read from Eldorado now, e.g. the Refresh button).
+app.get('/eldorado/offers', offerRoute(async (req) => {
+  const [offers, { firstSeen, autodrop }] = await Promise.all([eldorado.listOffers({ live: req.query.live === '1' }), offerAges()]);
   const now = Date.now();
   offers.forEach((o) => {
     const since = listedSince(o, firstSeen);
@@ -860,7 +861,7 @@ app.get('/eldorado/offers', offerRoute(async () => {
     o.expiresInDays = o.expires ? Math.ceil((Date.parse(o.expires) - now) / 86400000) : null;
     o.autodrop = autodrop[o.id] || null;
   });
-  return { offers, agesAvailable: offers.some((o) => o.daysListed != null) };
+  return { offers, agesAvailable: offers.some((o) => o.daysListed != null), source: eldorado.dataSources().offers };
 }));
 // Competitor prices for each offer (see market.js); separate so the table shows first.
 app.get('/eldorado/market', offerRoute(async () => ({ market: await market.marketFor(await eldorado.listOffers()) })));

@@ -64,17 +64,47 @@ async function workerCall(route, body) {
   return { status: res.status, ok: res.ok, body: await readBody(res) };
 }
 
+// ---------- request counts ----------
+// Every request this app makes to Eldorado, per 5-minute block, sent to the Worker at most once a
+// minute. Next to the Worker's own counts, they show how much traffic came before a rate limit.
+const BLOCK_MS = 5 * 60 * 1000;
+let unsent = {}; // { "YYYY-MM-DDTHH:MM": n }
+let flushTimer = null;
+
+function countCall() {
+  const block = new Date(Math.floor(Date.now() / BLOCK_MS) * BLOCK_MS).toISOString().slice(0, 16);
+  unsent[block] = (unsent[block] || 0) + 1;
+  if (!hasWorker() || flushTimer) return;
+  flushTimer = setTimeout(flushCalls, 60 * 1000);
+  if (flushTimer.unref) flushTimer.unref();
+}
+
+async function flushCalls() {
+  flushTimer = null;
+  const counts = unsent;
+  unsent = {};
+  if (!Object.keys(counts).length || !hasWorker()) return;
+  try {
+    const r = await workerCall('/alerts/calls', { pc: os.hostname(), counts });
+    if (!r.ok) throw new Error('status ' + r.status);
+  } catch (e) {
+    Object.entries(counts).forEach(([k, n]) => { unsent[k] = (unsent[k] || 0) + n; }); // try again later
+  }
+}
+
 function pausedError() {
   const at = new Date(pausedUntil).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   return new EldoradoError(`Eldorado is rate-limiting requests, so Eldorado calls are paused until ${at} (the 24/7 checks pause too). Try again then.`, 429);
 }
 
 // A 429 from Eldorado: pause here, and tell the Worker so the checks and the other PC pause too.
-async function rateLimited(what) {
-  pausedUntil = Date.now() + COOLDOWN_MS;
+// res: the 429 response, for its Retry-After (seconds), if Eldorado sends one.
+async function rateLimited(what, res) {
+  const retryAfter = res ? Number(res.headers.get('retry-after')) || null : null;
+  pausedUntil = Date.now() + Math.max(COOLDOWN_MS, (retryAfter || 0) * 1000);
   if (hasWorker()) {
     try {
-      const r = await workerCall('/alerts/ratelimit', { what, pc: os.hostname() });
+      const r = await workerCall('/alerts/ratelimit', { what, pc: os.hostname(), retryAfter });
       if (r.ok && r.body && r.body.until) pausedUntil = Date.parse(r.body.until) || pausedUntil;
     } catch (e) { /* the pause here still holds */ }
   }
@@ -107,6 +137,7 @@ async function getToken() {
     if (shared) return shared;
   }
 
+  countCall();
   const res = await fetch(BASE_URL + '/api/authentication/seller/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -116,7 +147,7 @@ async function getToken() {
     })
   });
   const body = await readBody(res);
-  if (res.status === 429) throw await rateLimited('login');
+  if (res.status === 429) throw await rateLimited('login', res);
   if (!res.ok || !body || !body.accessToken) {
     cachedToken = null;
     throw new EldoradoError('Eldorado rejected the API credentials: ' + describeError(body), res.status, body);
@@ -133,6 +164,7 @@ function refused(token) {
 
 async function api(method, apiPath, payload) {
   const token = await getToken();
+  countCall();
   const res = await fetch(BASE_URL + apiPath, {
     method,
     headers: {
@@ -143,7 +175,7 @@ async function api(method, apiPath, payload) {
   });
   const body = await readBody(res);
   if (res.status === 401) refused(token);
-  if (res.status === 429) throw await rateLimited(`${method} ${apiPath.split('?')[0]}`);
+  if (res.status === 429) throw await rateLimited(`${method} ${apiPath.split('?')[0]}`, res);
   if (!res.ok) {
     throw new EldoradoError(`Eldorado ${method} ${apiPath} failed (${res.status}): ${describeError(body)}`, res.status, body);
   }
@@ -157,6 +189,7 @@ async function uploadOfferImage(file) {
   const token = await getToken();
   const form = new FormData();
   form.append('image', new Blob([file.buffer], { type: file.mimetype || 'image/png' }), file.originalname || 'main.png');
+  countCall();
   const res = await fetch(BASE_URL + '/api/files/me/Offer', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + token },
@@ -164,7 +197,7 @@ async function uploadOfferImage(file) {
   });
   const body = await readBody(res);
   if (res.status === 401) refused(token);
-  if (res.status === 429) throw await rateLimited('image upload');
+  if (res.status === 429) throw await rateLimited('image upload', res);
   if (!res.ok) {
     throw new EldoradoError(`Eldorado image upload failed (${res.status}): ${describeError(body)}`, res.status, body);
   }
@@ -294,6 +327,8 @@ async function publishPausedAccountOffer(input, mainImage, extraImages = []) {
   if (!offerId) {
     throw new EldoradoError('Eldorado accepted the offer but returned no offer ID. Check your offers on the site.', 502, created);
   }
+  // A new offer: the Offers page re-reads the list once instead of showing the copy without it.
+  await tellWorker('/alerts/offers/update', { stale: true });
 
   try {
     await api('PUT', `/api/flexibleOffersUser/me/${encodeURIComponent(offerId)}/pause`);
@@ -345,8 +380,48 @@ function summarizeOffer(o) {
   };
 }
 
-// Every account offer (active and paused), all pages.
-async function listOffers() {
+// ---------- the Worker's copies of what its checks read ----------
+// The 24/7 checks already read your orders (every 5 minutes), order history (nightly) and offers
+// (hourly) and keep them (worker/snapshots.js). Pages show those instead of reading Eldorado again;
+// Eldorado is read here only when the Worker isn't reachable, its copy is too old, or you ask
+// (Refresh on the Offers page). Changes made here are passed on so the copies show them at once.
+const ORDERS_FRESH_MS = 40 * 60 * 1000; // the checks record a run at least every 30 minutes
+const OFFERS_FRESH_MS = 70 * 60 * 1000; // the checks re-read offers hourly
+const sources = { offers: null, orders: null, history: null }; // where each list last came from
+
+async function fromWorker(route) {
+  if (!hasWorker()) return null;
+  try {
+    const r = await workerCall(route);
+    return r.ok && r.body && typeof r.body === 'object' ? r.body : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function tellWorker(route, body) {
+  if (!hasWorker()) return;
+  try { await workerCall(route, body); } catch (e) { /* the next check catches up */ }
+}
+
+// The order copy is good when the checks ran lately and their order check (or login) didn't fail.
+// While paused after a rate limit it is still the latest there is.
+function ordersFresh(snap) {
+  if (!snap || !Array.isArray(snap.orders) || !snap.lastRun) return false;
+  if (Date.now() - Date.parse(snap.lastRun.at) > ORDERS_FRESH_MS) return false;
+  return !(snap.lastRun.problems || []).some((p) => /^(orders|login):/.test(p));
+}
+
+// Every account offer (active and paused). From the Worker's copy unless live (or no usable copy),
+// in which case all pages are read and the fresh list goes to the Worker.
+async function listOffers({ live = false } = {}) {
+  if (!live) {
+    const snap = await fromWorker('/alerts/offers');
+    if (snap && Array.isArray(snap.offers) && !snap.stale && Date.now() - Number(snap.at) < OFFERS_FRESH_MS) {
+      sources.offers = { from: 'worker', at: new Date(Number(snap.at)).toISOString() };
+      return snap.offers.map(summarizeOffer);
+    }
+  }
   const base = '/api/flexibleOffers/me/search?category=Account&pageSize=50';
   const first = await api('GET', base);
   const all = [...(first.results || [])];
@@ -355,6 +430,8 @@ async function listOffers() {
     const page = await api('GET', `${base}&pageIndex=${start + n}`);
     all.push(...(page.results || []));
   }
+  sources.offers = { from: 'eldorado', at: new Date().toISOString() };
+  await tellWorker('/alerts/offers/update', { offers: all });
   return all.map(summarizeOffer);
 }
 
@@ -362,12 +439,23 @@ async function changePrice(id, amount) {
   const value = Math.round(Number(amount) * 100) / 100;
   if (!Number.isFinite(value) || value <= 0) throw new EldoradoError('Price must be a number above 0.', 400);
   await api('PUT', `/api/flexibleOffersUser/me/${enc(id)}/changePrice`, { amount: value, currency: 'USD' });
+  await tellWorker('/alerts/offers/update', { patch: { id, pricePerUnit: { amount: value, currency: 'USD' } } });
   return { price: value };
 }
 
-const pauseOffer = (id) => api('PUT', `/api/flexibleOffersUser/me/${enc(id)}/pause`);
-const resumeOffer = (id) => api('PUT', `/api/flexibleOffersUser/me/${enc(id)}/resume`);
-const deleteOffer = (id) => api('DELETE', `/api/flexibleOffersUser/me/${enc(id)}`);
+async function setOfferState(id, action, state) {
+  const out = await api('PUT', `/api/flexibleOffersUser/me/${enc(id)}/${action}`);
+  await tellWorker('/alerts/offers/update', { patch: { id, offerState: state } });
+  return out;
+}
+const pauseOffer = (id) => setOfferState(id, 'pause', 'Paused');
+const resumeOffer = (id) => setOfferState(id, 'resume', 'Active');
+
+async function deleteOffer(id) {
+  const out = await api('DELETE', `/api/flexibleOffersUser/me/${enc(id)}`);
+  await tellWorker('/alerts/offers/update', { remove: id });
+  return out;
+}
 
 // The attribute list in the shape the update / create requests take.
 function attributesForUpdate(attributes) {
@@ -429,6 +517,7 @@ async function updateOfferText(id, title, description) {
   if (JSON.stringify(attributesForUpdate(after.attributes)) !== JSON.stringify(attributesForUpdate(before.attributes))) warnings.push('the offer fields (type, levels...) changed');
   if (secretsAfter.length !== secrets.length) warnings.push(`delivery details went from ${secrets.length} to ${secretsAfter.length}`);
   if (after.pricePerUnit && before.pricePerUnit && after.pricePerUnit.amount !== before.pricePerUnit.amount) warnings.push('the price changed');
+  await tellWorker('/alerts/offers/update', { replace: after });
   return { offer: summarizeOffer(after), warnings };
 }
 
@@ -450,14 +539,61 @@ function summarizeOrder(o) {
   };
 }
 
-// Your latest 50 sales (newest first).
-async function listOrders() {
+// Your latest 50 sales (newest first): the Worker's copy (at most 5 minutes old) unless live or
+// there's no usable copy.
+async function listOrders({ live = false } = {}) {
+  if (!live) {
+    const snap = await fromWorker('/alerts/orders');
+    if (ordersFresh(snap)) {
+      sources.orders = { from: 'worker', at: snap.lastRun.at };
+      return snap.orders.map(summarizeOrder);
+    }
+  }
   const d = await api('GET', '/api/v1/orders/me/seller/orders?displayFilter=DisplaySellingOrders&isAscendingDateOrder=false&pageSize=50');
+  sources.orders = { from: 'eldorado', at: new Date().toISOString() };
   return (d.results || []).map(summarizeOrder);
 }
 
-// Sales history for the stats page, newest first, following Eldorado's cursor (up to max orders).
+// One order of the sales history, with account type, total-level bracket and the buyer's review.
+function historyEntry(o) {
+  const attrs = (o.orderOfferDetails && o.orderOfferDetails.offerAttributesProperties) || [];
+  const attr = (id) => attrs.find((a) => a.attributeId === id);
+  const type = attr('osrs-account-type');
+  const bracket = attr('osrs-total-level');
+  const r = o.review;
+  return {
+    ...summarizeOrder(o),
+    type: type ? (type.values || [])[0] || type.id : null,
+    bracket: bracket ? (bracket.values || [])[0] || bracket.id : null,
+    // Buyer feedback (no buyer name): rating Positive / Negative, null when not reviewed yet.
+    review: r && r.feedbackRating && r.feedbackRating !== 'Unrated'
+      ? {
+          rating: r.feedbackRating,
+          tags: r.feedbackTags || [],
+          message: r.reviewMessage || '',
+          hidden: r.isReviewMessageVisible === false,
+          changed: typeof r.wasInitialRatingPositive === 'boolean' && r.wasInitialRatingPositive !== (r.feedbackRating === 'Positive')
+        }
+      : null
+  };
+}
+
+// Sales history for the Stats / Reviews pages, newest first (up to max orders). From the Worker's
+// copy; while its first read is still going, its latest page. Read from Eldorado (every page,
+// following the cursor) only without a reachable, up-to-date Worker.
 async function listAllOrders(max = 500) {
+  const snap = await fromWorker('/alerts/history');
+  if (snap && Array.isArray(snap.orders)) {
+    sources.history = { from: 'worker', at: snap.at, partial: false };
+    return snap.orders.slice(0, max).map(historyEntry);
+  }
+  if (snap) {
+    const latest = await fromWorker('/alerts/orders');
+    if (latest && Array.isArray(latest.orders)) {
+      sources.history = { from: 'worker', at: latest.at, partial: true, readingNow: snap.readingNow };
+      return latest.orders.map(historyEntry);
+    }
+  }
   const base = '/api/v1/orders/me/seller/orders?displayFilter=DisplaySellingOrders&isAscendingDateOrder=false&pageSize=50';
   const all = [];
   let cursor = null;
@@ -467,31 +603,15 @@ async function listAllOrders(max = 500) {
     if (!d.nextPageCursor || !(d.results || []).length || d.nextPageCursor === cursor) break;
     cursor = d.nextPageCursor;
   }
-  return all.map((o) => {
-    const attrs = (o.orderOfferDetails && o.orderOfferDetails.offerAttributesProperties) || [];
-    const attr = (id) => attrs.find((a) => a.attributeId === id);
-    const type = attr('osrs-account-type');
-    const bracket = attr('osrs-total-level');
-    const r = o.review;
-    return {
-      ...summarizeOrder(o),
-      type: type ? (type.values || [])[0] || type.id : null,
-      bracket: bracket ? (bracket.values || [])[0] || bracket.id : null,
-      // Buyer feedback (no buyer name): rating Positive / Negative, null when not reviewed yet.
-      review: r && r.feedbackRating && r.feedbackRating !== 'Unrated'
-        ? {
-            rating: r.feedbackRating,
-            tags: r.feedbackTags || [],
-            message: r.reviewMessage || '',
-            hidden: r.isReviewMessageVisible === false,
-            changed: typeof r.wasInitialRatingPositive === 'boolean' && r.wasInitialRatingPositive !== (r.feedbackRating === 'Positive')
-          }
-        : null
-    };
-  });
+  sources.history = { from: 'eldorado', at: new Date().toISOString(), partial: false };
+  return all.map(historyEntry);
 }
 
-const deliverOrder = (id) => api('PUT', `/api/v1/orders/me/${enc(id)}/deliver`);
+async function deliverOrder(id) {
+  const out = await api('PUT', `/api/v1/orders/me/${enc(id)}/deliver`);
+  await tellWorker('/alerts/orders/update', { id, state: 'Delivered' });
+  return out;
+}
 
 module.exports = {
   listOrders,
@@ -508,5 +628,7 @@ module.exports = {
   pauseOffer,
   resumeOffer,
   deleteOffer,
-  updateOfferText
+  updateOfferText,
+  dataSources: () => ({ ...sources }),
+  flushCalls
 };

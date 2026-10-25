@@ -115,6 +115,8 @@ The app only uses information visible in your screenshots or returned by the his
 
 With Eldorado set up, the **Offers** link at the top opens a page with all your account offers on Eldorado:
 
+- The list is the 24/7 Worker's copy (read hourly and updated with your changes here), so opening the page costs no Eldorado requests. **Refresh** reads Eldorado now.
+
 - **Search**, filter by state (Active / Paused) or **Listed 14+ days**, and sort by days listed or price. Days listed come from the 24/7 Worker's records.
 - Per offer: change the **price** (type it, then Save or Enter), **Pause / Resume**, **Edit** the title and description, **Delete** (click twice to confirm).
 - Editing text keeps everything else: the app reads the offer and its delivery details, changes only the title and description, sends the rest back as it was, then reads it again and warns you if anything else changed.
@@ -122,6 +124,10 @@ With Eldorado set up, the **Offers** link at the top opens a page with all your 
 - **Market**: Eldorado has no market value for OSRS accounts, so each offer is compared with other sellers' live listings of the same type, total-level bracket and combat bracket (your own listings left out): the median, how many listings, and the middle half of their prices. Fewer than 3 matches widens it to type + total bracket, marked **rough**. The % gap is only highlighted for close matches with 10+ listings; otherwise it says **few listings**. **Use median** fills the price box (press Save to apply).
 - **Listed / expires**: days listed (the earlier of when the 24/7 Worker first saw the offer and its expiry date minus 21 days) and how long until the offer expires. **Expiring soon** filters to offers expiring within 3 days. Eldorado's API can't renew offers, so renew those on the site.
 - **Auto-drop** (opt-in per offer): from 14 days listed, -5% every 7 days, never below 75% of the price it had when you ticked it. The 24/7 Worker applies it (checked hourly) and posts each drop to #price-drops. A price you lowered yourself below the schedule is left alone.
+
+## Eldorado rate limit
+
+Eldorado limits how many requests your account can make, but doesn't say how many. To stay under it, the 24/7 Worker is the only thing that reads your orders and offers: it keeps copies the app shows (Orders page, folder sync, Stats, Reviews, Offers), and the app tells it about changes you make. One login is shared by the Worker and both PCs. After a "Quota exceeded" everything pauses Eldorado calls for 15 minutes (longer if Eldorado asks). Every request is counted per 5 minutes (Worker and each PC); the Settings setup check shows the last hour and how many requests came before each rate-limit hit.
 
 ## Stats
 

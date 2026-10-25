@@ -1,5 +1,6 @@
-import { runAlerts, sendTests, setAutoDrop, health, tokenInfo, cooldown, noteRateLimit } from './alerts.js';
+import { runAlerts, sendTests, setAutoDrop, health, tokenInfo, cooldown, noteRateLimit, takeCalls } from './alerts.js';
 import { saveBackup, listBackups, getBackup, latestBackups } from './backup.js';
+import { updateOffers, updateOrder, logCalls } from './snapshots.js';
 
 export default {
   async fetch(request, env) {
@@ -51,15 +52,48 @@ export default {
         const info = await tokenInfo(env, { stale: body.stale });
         return reply(200, { token: info.value, expiresAt: info.expiresAt });
       } catch (err) {
-        if (err.status === 429) return reply(429, { error: err.message, until: (await noteRateLimit(env, "login", body.pc || "app")).until });
+        if (err.status === 429) return reply(429, { error: err.message, until: (await noteRateLimit(env, "login", body.pc || "app", err.retryAfter)).until });
         return reply(502, { error: err.message, status: err.status || null });
+      } finally {
+        const n = takeCalls(); // a login made for the app counts as the Worker's request
+        if (n) await logCalls(env, "worker", n).catch(() => {});
       }
     }
 
-    // The app hit a rate limit itself: { what, pc } -> pause everyone, log it. -> { until }
+    // What the 24/7 checks read from Eldorado, for the app to show instead of reading it again
+    // (snapshots.js). lastRun says how fresh it is.
+    if (url.pathname === "/alerts/orders") {
+      const snap = await env.STATE.get("ordersLatest", "json");
+      return json({ ...(snap || { at: null, orders: null }), lastRun: await env.STATE.get("lastRun", "json") });
+    }
+    if (url.pathname === "/alerts/history") {
+      const snap = await env.STATE.get("orderHistory", "json");
+      const crawl = await env.STATE.get("historyCrawl", "json");
+      return json({ ...(snap || { at: null, orders: null, complete: false }), readingNow: crawl ? crawl.orders.length : null });
+    }
+    if (url.pathname === "/alerts/offers") {
+      const snap = await env.STATE.get("offersCache", "json");
+      return json(snap || { at: 0, offers: null });
+    }
+    // The app's own changes, so the next page load already shows them.
+    if (url.pathname === "/alerts/offers/update") {
+      const result = await updateOffers(env, await request.json().catch(() => ({})));
+      return new Response(JSON.stringify(result), { status: result.status || 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (url.pathname === "/alerts/orders/update") {
+      const result = await updateOrder(env, await request.json().catch(() => ({})));
+      return new Response(JSON.stringify(result), { status: result.status || 200, headers: { "Content-Type": "application/json" } });
+    }
+    // The app's Eldorado request counts: { pc, counts: { "YYYY-MM-DDTHH:MM": n } } (5-minute blocks).
+    if (url.pathname === "/alerts/calls") {
+      const body = await request.json().catch(() => ({}));
+      return json(await logCalls(env, body.pc || "app", body.counts));
+    }
+
+    // The app hit a rate limit itself: { what, pc, retryAfter? } -> pause everyone, log it. -> { until }
     if (url.pathname === "/alerts/ratelimit") {
       const body = await request.json().catch(() => ({}));
-      return json(await noteRateLimit(env, body.what, body.pc || "app"));
+      return json(await noteRateLimit(env, body.what, body.pc || "app", body.retryAfter));
     }
 
     // The app's setup check (Settings page): last run, credentials, which channels are set, backups.

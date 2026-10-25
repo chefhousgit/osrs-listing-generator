@@ -56,11 +56,16 @@
   const byId = (id) => offers.find((o) => o.id === id);
 
   // ---------- load / filter ----------
-  async function load() {
-    status('loading', 'Loading your offers from Eldorado...');
+  // The list is the 24/7 checks' copy (hourly, plus your changes made here); Refresh (live) reads
+  // Eldorado now, which costs requests against its rate limit.
+  let source = null;
+
+  async function load(live) {
+    status('loading', live === true ? 'Reading your offers from Eldorado...' : 'Loading your offers...');
     try {
-      const data = await call('GET', '/eldorado/offers');
+      const data = await call('GET', '/eldorado/offers' + (live === true ? '?live=1' : ''));
       offers = data.offers;
+      source = data.source;
       agesAvailable = data.agesAvailable;
       staleEl.disabled = !agesAvailable;
       status('', '');
@@ -116,7 +121,11 @@
       rowsEl.appendChild(tr);
     }
     const active = offers.filter((o) => o.state === 'Active').length;
-    countEl.textContent = `${list.length} shown · ${active} active · ${offers.length - active} paused`;
+    const mins = source && source.at ? Math.max(0, Math.round((Date.now() - Date.parse(source.at)) / 60000)) : null;
+    const from = !source ? '' : source.from === 'worker'
+      ? ` · from the 24/7 checks${mins != null ? `, ${mins < 1 ? 'just now' : mins + ' min ago'}` : ''}`
+      : ' · read from Eldorado just now';
+    countEl.textContent = `${list.length} shown · ${active} active · ${offers.length - active} paused${from}`;
     allEl.checked = list.length > 0 && list.every((o) => selected.has(o.id));
     renderBulk();
   }
@@ -453,7 +462,7 @@
   });
 
   [searchEl, stateEl, staleEl, expiringEl, sortEl].forEach((e) => e.addEventListener('input', render));
-  $('offerRefresh').addEventListener('click', load);
+  $('offerRefresh').addEventListener('click', () => load(true));
 
   load();
 })();

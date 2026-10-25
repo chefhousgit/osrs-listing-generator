@@ -127,6 +127,20 @@ test('setup check: stopped checks, expiring credentials, sync off, failed backup
   assert.match(r.backup.detail, /failed \(500\)/);
 });
 
+test('setup check: requests per source and the traffic before a hit', async () => {
+  const me = os.hostname().replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
+  const r = await rowsOf(deps({ worker: async () => workerHealth({
+    calls: { lastHour: { worker: 14, [me]: 9, 'OTHER-PC': 2 }, last24h: { worker: 300, [me]: 40 } },
+    history: { orders: 0, readingNow: 150, max: 500 },
+    rateLimits: [{ at: minsAgo(20), what: 'orders', by: 'worker', retryAfter: 60, before: { m5: { worker: 1, [me]: 6 }, m15: { worker: 3, [me]: 12 }, m60: { worker: 14, [me]: 20 } } }],
+    cooldown: null
+  }) }));
+  assert.equal(r.requests.text, `Last hour: 24/7 checks 14, ${me} (this PC) 9, OTHER-PC 2.`);
+  assert.match(r.requests.detail, /Last 24 hours: 24\/7 checks 300/);
+  assert.match(r.requests.detail, /150 orders so far/);
+  assert.match(r.ratelimits.detail, /after 7 \/ 15 \/ 34 requests in 5 \/ 15 \/ 60 min, Eldorado said wait 60s/);
+});
+
 test('setup check: rate limits row (none, recent hits, paused now)', async () => {
   const none = await rowsOf(deps({ worker: async () => workerHealth({ rateLimits: [{ at: minsAgo(60 * 24 * 8), what: 'orders', by: 'worker' }], cooldown: null }) }));
   assert.equal(none.ratelimits.status, 'ok', 'older than 7 days does not count');

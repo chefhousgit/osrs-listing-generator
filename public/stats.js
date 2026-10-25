@@ -154,6 +154,14 @@
     table.appendChild(body);
   }
 
+  // Where the order history came from: the 24/7 checks' copy, still being read the first time, or Eldorado.
+  function historyNote(src) {
+    if (!src) return '';
+    if (src.partial) return ' Your full order history is still being read by the 24/7 checks (one page every 5 minutes' + (src.readingNow ? `, ${src.readingNow} orders so far` : '') + '): until then only your latest 50 orders are counted.';
+    if (src.from === 'worker' && src.at) return ' Order history from the 24/7 checks (new orders added every 5 minutes, re-read nightly).';
+    return '';
+  }
+
   async function load() {
     status('loading', 'Loading your sales history from Eldorado...');
     try {
@@ -167,7 +175,8 @@
       breakdown('bracketTable', d.byBracket, 'Total level');
       $('statsFoot').textContent = `Account sales only, canceled orders left out (${d.totals.canceled} canceled).`
         + (d.capped ? ' Based on your latest 500 orders.' : '')
-        + ' Days to sell needs accounts listed and sold through the app (from their listing.json / sale.json).';
+        + ' Days to sell needs accounts listed and sold through the app (from their listing.json / sale.json).'
+        + historyNote(d.source);
     } catch (err) {
       status('error', err.message);
     }

@@ -25,7 +25,10 @@
 // Eldorado rate-limits the seller API (429 "Quota exceeded"), so each run stays light: the login
 // token is reused for its 15 minutes (cached in KV), orders are checked every run, and the offer
 // list is refreshed at most hourly (plus right before the summary). A 429 only reaches #errors if
-// it keeps happening for RATE_LIMIT_GRACE_HOURS.
+// it keeps happening for RATE_LIMIT_GRACE_HOURS. What the checks read is kept for the app
+// (snapshots.js), so the app doesn't read the same thing from Eldorado again.
+
+import { saveOrders, slimOrder, mergeOrders, logCalls, callsBefore, HISTORY_MAX } from './snapshots.js';
 
 const ELDORADO = 'https://www.eldorado.gg';
 const IMAGE_BASE = 'https://fileserviceusprod.blob.core.windows.net/offerimages/';
@@ -44,15 +47,23 @@ const RATE_LIMIT_GRACE_HOURS = 3;
 const COLORS = { positive: 0x5cb85c, negative: 0xd9534f, sale: 0x5cb85c, dispute: 0xd9534f, cancel: 0x888888, done: 0xe4b04a, summary: 0xe4b04a, alert: 0xd68f3c };
 
 // ---------- Eldorado ----------
+// Every request to Eldorado goes through here, so each run can log how many it made (callLog).
+let calls = 0;
+const eldoradoFetch = (url, init) => { calls++; return fetch(url, init); };
+export function takeCalls() { const n = calls; calls = 0; return n; }
+
+// Seconds from a 429's Retry-After header, if Eldorado sends one.
+const retryAfter = (res) => { const s = Number(res.headers.get('retry-after')); return Number.isFinite(s) && s > 0 ? s : null; };
+
 async function getToken(env) {
-  const res = await fetch(ELDORADO + '/api/authentication/seller/token', {
+  const res = await eldoradoFetch(ELDORADO + '/api/authentication/seller/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ clientId: env.ELDORADO_CLIENT_ID, clientSecret: env.ELDORADO_CLIENT_SECRET })
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body.accessToken) {
-    throw Object.assign(new Error((body.messages && body.messages.join(' ')) || 'status ' + res.status), { status: res.status });
+    throw Object.assign(new Error((body.messages && body.messages.join(' ')) || 'status ' + res.status), { status: res.status, retryAfter: retryAfter(res) });
   }
   return { value: body.accessToken, expiresIn: Number(body.expiresIn) || 900 };
 }
@@ -83,29 +94,36 @@ export async function cooldown(env) {
   return c && Date.parse(c.until) > Date.now() ? c : null;
 }
 
-export async function noteRateLimit(env, what, by = 'worker') {
-  const until = new Date(Date.now() + COOLDOWN_MINUTES * 60 * 1000).toISOString();
+// retryAfter: seconds Eldorado asked to wait (Retry-After), when it says; the pause is never shorter.
+export async function noteRateLimit(env, what, by = 'worker', retryAfterSec = null) {
+  const wait = Math.max(COOLDOWN_MINUTES * 60, Number(retryAfterSec) || 0);
+  const until = new Date(Date.now() + wait * 1000).toISOString();
   const entry = { at: new Date().toISOString(), what: String(what || '?').slice(0, 80), by: String(by || '?').slice(0, 40) };
-  await env.STATE.put('cooldown', JSON.stringify({ until, what: entry.what, by: entry.by }), { expirationTtl: COOLDOWN_MINUTES * 60 + 60 });
+  if (retryAfterSec) entry.retryAfter = Number(retryAfterSec);
+  await env.STATE.put('cooldown', JSON.stringify({ until, what: entry.what, by: entry.by }), { expirationTtl: wait + 60 });
   const log = (await env.STATE.get('rateLimits', 'json')) || [];
   await env.STATE.put('rateLimits', JSON.stringify([entry, ...log].slice(0, RATE_LOG_SIZE)));
   return { until };
 }
 
 async function getJson(token, path) {
-  const res = await fetch(ELDORADO + path, { headers: { Authorization: 'Bearer ' + token } });
+  const res = await eldoradoFetch(ELDORADO + path, { headers: { Authorization: 'Bearer ' + token } });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     let detail = body.slice(0, 300);
     try { const j = JSON.parse(body); if (j.messages) detail = j.messages.join(' '); } catch (e) { /* not JSON */ }
-    throw Object.assign(new Error(`GET ${path.split('?')[0]} failed (${res.status})${detail ? ': ' + detail : ''}`), { status: res.status });
+    throw Object.assign(new Error(`GET ${path.split('?')[0]} failed (${res.status})${detail ? ': ' + detail : ''}`), { status: res.status, retryAfter: retryAfter(res) });
   }
   return res.json();
 }
 
+const ORDERS_PATH = '/api/v1/orders/me/seller/orders?displayFilter=DisplaySellingOrders&isAscendingDateOrder=false&pageSize=';
+
+// One page of orders, newest first: { results, nextPageCursor }.
+const getOrderPage = (token, pageSize, cursor) => getJson(token, ORDERS_PATH + pageSize + (cursor ? '&cursorValue=' + encodeURIComponent(cursor) : ''));
+
 function getOrders(token, pageSize) {
-  return getJson(token, `/api/v1/orders/me/seller/orders?displayFilter=DisplaySellingOrders&isAscendingDateOrder=false&pageSize=${pageSize}`)
-    .then((d) => d.results || []);
+  return getOrderPage(token, pageSize).then((d) => d.results || []);
 }
 
 // All account offers (active and paused), every page. The first request has no page number
@@ -185,7 +203,7 @@ async function alertOnce(env, key, text) {
 // anything else goes to #errors once a day.
 async function reportProblem(env, key, err, text) {
   if (err.status === 429) {
-    await noteRateLimit(env, key);
+    await noteRateLimit(env, key, 'worker', err.retryAfter);
     const flag = 'ratelimited:' + key;
     const since = await env.STATE.get(flag);
     if (!since) {
@@ -207,8 +225,11 @@ async function clearRateLimit(env, key) {
 
 // ---------- every 5 minutes ----------
 const SOLD_STATES = ['Paid', 'Delivered', 'Received', 'Completed', 'PendingReview'];
+// Returns the page it read ({ results, nextPageCursor }), which also starts a history re-read.
 export async function checkOrders(env, token) {
-  const orders = await getOrders(token, 50); // one request either way; 50 so late reviews are still seen
+  const page = await getOrderPage(token, 50); // one request either way; 50 so late reviews are still seen
+  const orders = page.results || [];
+  await saveOrders(env, orders); // for the app's Orders page, folder sync, Stats / Reviews
   await announceReviews(env, orders);
   const seen = await env.STATE.get('orders', 'json');
   const next = Object.assign({}, seen || {});
@@ -256,6 +277,37 @@ export async function checkOrders(env, token) {
     changed = true;
   }
   if (changed) await env.STATE.put('orders', JSON.stringify(next));
+  return page;
+}
+
+// ---------- order history (for the app's Stats / Reviews) ----------
+// Re-read once a night (HISTORY_HOUR in TIMEZONE), or right away when there's none yet, one page per
+// check so it never adds a burst: the first page is the one the order check just read, then one
+// more request per 5-minute run until HISTORY_MAX orders or the end. Between re-reads, every check
+// merges its latest page in (snapshots.js).
+const HISTORY_HOUR = 4;
+
+export async function crawlHistory(env, token, firstPage, local) {
+  let crawl = await env.STATE.get('historyCrawl', 'json');
+  if (!crawl) {
+    const hist = await env.STATE.get('orderHistory', 'json');
+    const due = !hist || (local.hour === HISTORY_HOUR && hist.rebuiltDay !== local.day);
+    if (!due) return;
+    crawl = { cursor: firstPage.nextPageCursor || null, orders: (firstPage.results || []).map(slimOrder), startedAt: new Date().toISOString() };
+  } else {
+    const d = await getOrderPage(token, 50, crawl.cursor);
+    const next = d.nextPageCursor && d.nextPageCursor !== crawl.cursor && (d.results || []).length ? d.nextPageCursor : null;
+    crawl.orders.push(...(d.results || []).map(slimOrder));
+    crawl.cursor = next;
+  }
+  if (!crawl.cursor || crawl.orders.length >= HISTORY_MAX) {
+    // The latest page wins: it has orders that came in (or changed) while this re-read ran.
+    const latest = (await env.STATE.get('ordersLatest', 'json')) || { orders: [] };
+    await env.STATE.put('orderHistory', JSON.stringify({ at: new Date().toISOString(), rebuiltDay: local.day, complete: true, orders: mergeOrders(latest.orders, crawl.orders) }));
+    await env.STATE.delete('historyCrawl');
+  } else {
+    await env.STATE.put('historyCrawl', JSON.stringify(crawl));
+  }
 }
 
 // ---------- reviews ----------
@@ -333,13 +385,13 @@ async function applyPriceDrops(env, token, offers, firstSeen) {
     const target = scheduledPrice(entry.base, days);
     const current = offer.pricePerUnit.amount;
     if (target == null || current <= target + 0.004) continue;
-    const res = await fetch(ELDORADO + `/api/flexibleOffersUser/me/${encodeURIComponent(id)}/changePrice`, {
+    const res = await eldoradoFetch(ELDORADO + `/api/flexibleOffersUser/me/${encodeURIComponent(id)}/changePrice`, {
       method: 'PUT',
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
       body: JSON.stringify({ amount: target, currency: 'USD' })
     });
     if (res.status === 429) {
-      await noteRateLimit(env, 'price drop');
+      await noteRateLimit(env, 'price drop', 'worker', retryAfter(res));
       break; // the rest wait for the next hourly run
     }
     if (!res.ok) {
@@ -428,7 +480,9 @@ function localParts(env, date) {
 
 async function sendSummary(env, token, offers, firstSeen) {
   const now = Date.now();
-  const orders = await getOrders(token, 50);
+  // The page this run's order check just saved; read from Eldorado only if it's missing.
+  const saved = await env.STATE.get('ordersLatest', 'json');
+  const orders = saved ? saved.orders : await getOrders(token, 50);
   const sold = orders.filter((o) => now - Date.parse(o.createdDate) < DAY && o.state && o.state.state !== 'Canceled');
   const revenue = sold.reduce((sum, o) => sum + Number((o.totalPrice && o.totalPrice.amount) || 0), 0);
   const active = offers.filter((o) => o.offerState === 'Active');
@@ -476,8 +530,18 @@ function credentialDaysLeft(env) {
 }
 
 // ---------- entry point ----------
-// forceSummary: send the summary now (used by the manual test route).
-export async function runAlerts(env, { forceSummary = false } = {}) {
+// forceSummary: send the summary now (used by the manual test route). Each run logs how many
+// Eldorado requests it made (callLog), so rate-limit hits can be matched against the traffic.
+export async function runAlerts(env, opts = {}) {
+  try {
+    return await runChecks(env, opts);
+  } finally {
+    const n = takeCalls();
+    if (n) await logCalls(env, 'worker', n).catch(() => {});
+  }
+}
+
+async function runChecks(env, { forceSummary = false } = {}) {
   // Paused after a rate limit (from these checks or the app): no Eldorado calls until it ends.
   const paused = await cooldown(env);
   if (paused) {
@@ -503,8 +567,9 @@ export async function runAlerts(env, { forceSummary = false } = {}) {
   }
 
   const problems = [];
+  let page = null;
   try {
-    await checkOrders(env, token);
+    page = await checkOrders(env, token);
     await clearRateLimit(env, 'orders');
   } catch (err) {
     problems.push('orders: ' + err.message);
@@ -512,6 +577,16 @@ export async function runAlerts(env, { forceSummary = false } = {}) {
   }
 
   const local = localParts(env, new Date());
+
+  // Order history for Stats / Reviews: at most one more request per run, never after a rate limit.
+  if (page && !(await cooldown(env))) {
+    try {
+      await crawlHistory(env, token, page, local);
+    } catch (err) {
+      problems.push('history: ' + err.message);
+      await reportProblem(env, 'history', err, 'Could not read your Eldorado order history (Stats / Reviews pages).');
+    }
+  }
   const summaryHour = Number(env.SUMMARY_HOUR || 21);
   const lastSummary = await env.STATE.get('summaryDay');
   const summaryDue = forceSummary || (local.hour >= summaryHour && lastSummary !== local.day);
@@ -528,7 +603,7 @@ export async function runAlerts(env, { forceSummary = false } = {}) {
     offers = cache.offers;
   } else {
     try {
-      offers = (await getOffers(token)).map((o) => ({ id: o.id, offerState: o.offerState, offerTitle: o.offerTitle, pricePerUnit: o.pricePerUnit, expireDate: o.expireDate }));
+      offers = await getOffers(token); // whole offers: the app's Offers page shows them as they are
       firstSeen = await trackOffers(env, offers);
       await applyPriceDrops(env, token, offers, firstSeen);
       await warnExpiring(env, offers);
@@ -575,8 +650,17 @@ async function recordRun(env, problems) {
 }
 
 // The Worker's side of the app's setup check: when the checks last ran, credentials, which
-// channels have a webhook (never the URLs), and each PC's latest backup.
+// channels have a webhook (never the URLs), each PC's latest backup, and Eldorado requests: per
+// source in the last hour, and in the 5 / 15 / 60 minutes before each rate-limit hit.
 export async function health(env, backups) {
+  const log = (await env.STATE.get('callLog', 'json')) || {};
+  const now = new Date().toISOString();
+  const hits = ((await env.STATE.get('rateLimits', 'json')) || []).map((h) => ({
+    ...h,
+    before: { m5: callsBefore(log, h.at, 5), m15: callsBefore(log, h.at, 15), m60: callsBefore(log, h.at, 60) }
+  }));
+  const history = await env.STATE.get('orderHistory', 'json');
+  const crawl = await env.STATE.get('historyCrawl', 'json');
   return {
     ok: true,
     lastRun: await env.STATE.get('lastRun', 'json'),
@@ -586,7 +670,9 @@ export async function health(env, backups) {
     credsDaysLeft: credentialDaysLeft(env),
     channels: CHANNELS.map((c) => ({ name: c.name, set: Boolean(env[c.key] || (c.alt && env[c.alt])), secret: c.key, fallback: c.fallback || null })),
     cooldown: await cooldown(env),
-    rateLimits: (await env.STATE.get('rateLimits', 'json')) || [],
+    rateLimits: hits,
+    calls: { lastHour: callsBefore(log, now, 60), last24h: callsBefore(log, now, 24 * 60) },
+    history: { orders: history ? history.orders.length : 0, at: history ? history.at : null, readingNow: crawl ? crawl.orders.length : null, max: HISTORY_MAX },
     backups
   };
 }

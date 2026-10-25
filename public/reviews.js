@@ -105,6 +105,14 @@
     }
   }
 
+  // Where the order history came from: the 24/7 checks' copy, still being read the first time, or Eldorado.
+  function historyNote(src) {
+    if (!src) return '';
+    if (src.partial) return ' Your full order history is still being read by the 24/7 checks (one page every 5 minutes' + (src.readingNow ? `, ${src.readingNow} orders so far` : '') + '): until then only your latest 50 orders are counted.';
+    if (src.from === 'worker' && src.at) return ' Order history from the 24/7 checks (new orders added every 5 minutes, re-read nightly).';
+    return '';
+  }
+
   async function load() {
     status('loading', 'Loading your reviews from Eldorado...');
     try {
@@ -119,7 +127,8 @@
         data.byType.map((t) => [t.key, String(t.sales), String(t.positive), String(t.negative)]), 'No sales yet.');
       renderRows();
       $('reviewsFoot').textContent = 'Account sales only, canceled orders left out. Buyers can review days after the sale.'
-        + (data.capped ? ' Based on your latest 500 orders.' : '');
+        + (data.capped ? ' Based on your latest 500 orders.' : '')
+        + historyNote(data.source);
     } catch (err) {
       status('error', err.message);
     }

@@ -99,7 +99,8 @@ async function reviews() {
     tags: [...tags.values()].sort((a, b) => (b.positive + b.negative) - (a.positive + a.negative)),
     byType: [...types.values()].sort((a, b) => b.sales - a.sales),
     reviews: reviewed.map((o) => ({ id: o.id, title: o.title, price: o.price, createdDate: o.createdDate, type: o.type, image: o.image, ...o.review })),
-    capped: all.length >= 500
+    capped: all.length >= 500,
+    source: eldorado.dataSources().history
   };
 }
 
@@ -138,7 +139,8 @@ async function compute() {
     byType: group(sales, (o) => o.type),
     byBracket: group(sales, (o) => o.bracket),
     daysToSell: await daysToSell(),
-    capped: all.length >= 500
+    capped: all.length >= 500,
+    source: eldorado.dataSources().history
   };
   cached = { at: Date.now(), data };
   return data;

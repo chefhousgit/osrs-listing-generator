@@ -147,6 +147,7 @@ const cleanPc = (pc) => String(pc || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0,
 
 async function health(deps, now = Date.now()) {
   const rows = [];
+  const me = cleanPc(require('os').hostname());
   let w = null;
 
   // Worker
@@ -176,7 +177,10 @@ async function health(deps, now = Date.now()) {
   if (w && Array.isArray(w.rateLimits)) {
     const week = w.rateLimits.filter((h) => now - Date.parse(h.at) < 7 * 24 * 60 * MIN);
     const when = (iso) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-    const detail = week.slice(0, 5).map((h) => `${when(h.at)}: ${h.what} (${h.by})`).join(' · ');
+    const total = (counts) => Object.values(counts || {}).reduce((s, n) => s + n, 0);
+    // With the request log: how much traffic came before each hit (5 / 15 / 60 minutes).
+    const before = (h) => (h.before ? `, after ${total(h.before.m5)} / ${total(h.before.m15)} / ${total(h.before.m60)} requests in 5 / 15 / 60 min` : '');
+    const detail = week.slice(0, 5).map((h) => `${when(h.at)}: ${h.what} (${h.by}${before(h)}${h.retryAfter ? `, Eldorado said wait ${h.retryAfter}s` : ''})`).join(' · ');
     if (w.cooldown) {
       rows.push(row('ratelimits', 'Rate limits', 'warn', `Eldorado calls are paused until ${new Date(w.cooldown.until).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} after a rate limit (${w.cooldown.what}, ${w.cooldown.by}).`, detail));
     } else if (week.length) {
@@ -184,6 +188,18 @@ async function health(deps, now = Date.now()) {
     } else {
       rows.push(row('ratelimits', 'Rate limits', 'ok', 'None in the last 7 days.'));
     }
+  }
+
+  // Eldorado requests in the last hour, per source (the Worker's checks and each PC).
+  if (w && w.calls && w.calls.lastHour) {
+    const hour = Object.entries(w.calls.lastHour).sort((a, b) => b[1] - a[1]);
+    const day = Object.entries(w.calls.last24h || {}).sort((a, b) => b[1] - a[1]);
+    const name = (who) => (who === 'worker' ? '24/7 checks' : who === me ? `${who} (this PC)` : who);
+    const list = (pairs) => pairs.map(([who, n]) => `${name(who)} ${n}`).join(', ');
+    rows.push(row('requests', 'Eldorado requests', 'ok',
+      hour.length ? `Last hour: ${list(hour)}.` : 'None in the last hour.',
+      [day.length ? `Last 24 hours: ${list(day)}.` : '',
+        w.history && w.history.readingNow != null ? `Reading your order history for Stats / Reviews: ${w.history.readingNow} orders so far (one page every 5 minutes).` : ''].filter(Boolean).join(' ')));
   }
 
   // Eldorado credentials
@@ -232,7 +248,6 @@ async function health(deps, now = Date.now()) {
   else rows.push(row('sync', 'Folder sync', 'ok', `Last run ${ago(sync.at, now)}: ${sync.moves.length ? sync.moves.length + ' moved' : 'nothing to move'}.`));
 
   // Backup
-  const me = cleanPc(require('os').hostname());
   const local = deps.backupStatus;
   if (w && Array.isArray(w.backups)) {
     const mine = w.backups.find((b) => b.pc === me);
